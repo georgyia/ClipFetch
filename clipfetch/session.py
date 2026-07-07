@@ -1,9 +1,9 @@
-"""Instagram browser session management.
+"""Browser session management for any platform.
 
 ClipFetch never touches your real browser or your password. It keeps its own
-Chromium profile under ``~/.clipfetch/profile``: the first run opens a visible
-window where you sign in to Instagram once, and the session cookie persists
-there for every later (headless) run.
+Chromium profile under ``~/.clipfetch``: the first run opens a visible window
+where you sign in once, and the session cookie persists there for every later
+(headless) run. Each platform gets its own profile so logins never collide.
 """
 
 from __future__ import annotations
@@ -11,49 +11,63 @@ from __future__ import annotations
 import time
 from contextlib import contextmanager
 from pathlib import Path
-from typing import Iterator
+from typing import Iterator, Optional
 
 from playwright.sync_api import BrowserContext, Playwright, sync_playwright
 
 from clipfetch.constants import USER_AGENT
 from clipfetch.errors import NotLoggedInError
+from clipfetch.platforms.base import Platform
 from clipfetch.ui import Console, Spinner
 
-PROFILE_DIR = Path.home() / ".clipfetch" / "profile"
-INSTAGRAM_URL = "https://www.instagram.com/"
-LOGIN_URL = INSTAGRAM_URL + "accounts/login/"
+CLIPFETCH_HOME = Path.home() / ".clipfetch"
 LOGIN_TIMEOUT_S = 300
 _POLL_INTERVAL_S = 2
 
 
-def _launch(playwright: Playwright, headless: bool) -> BrowserContext:
-    PROFILE_DIR.mkdir(parents=True, exist_ok=True)
+def profile_dir(platform: Platform) -> Path:
+    """Where a platform's persistent browser profile lives.
+
+    Instagram keeps the original ``~/.clipfetch/profile`` path so sessions
+    created before multi-platform support are not invalidated.
+    """
+    if platform.key == "instagram":
+        return CLIPFETCH_HOME / "profile"
+    return CLIPFETCH_HOME / f"profile-{platform.key}"
+
+
+def _launch(playwright: Playwright, profile: Path, headless: bool) -> BrowserContext:
+    profile.mkdir(parents=True, exist_ok=True)
     return playwright.chromium.launch_persistent_context(
-        PROFILE_DIR,
+        profile,
         headless=headless,
         viewport={"width": 1280, "height": 900},
         user_agent=USER_AGENT if headless else None,
     )
 
 
-def has_session_cookie(context: BrowserContext) -> bool:
-    """Whether the profile holds an Instagram session cookie."""
+def has_session_cookie(context: BrowserContext, platform: Platform) -> bool:
+    """Whether the profile holds a valid session cookie for the platform."""
+    if platform.session_cookie is None:
+        return True  # login not enforced for this platform
     now = time.time()
-    for cookie in context.cookies(INSTAGRAM_URL):
-        if cookie["name"] == "sessionid" and cookie["value"]:
+    for cookie in context.cookies(f"https://www.{platform.host}/"):
+        if cookie["name"] == platform.session_cookie and cookie["value"]:
             if cookie.get("expires", -1) in (-1, None) or cookie["expires"] > now:
                 return True
     return False
 
 
-def _wait_for_login(context: BrowserContext, console: Console, timeout_s: float) -> None:
+def _wait_for_login(
+    context: BrowserContext, platform: Platform, console: Console, timeout_s: float
+) -> None:
     """Block until the user signs in inside the opened window."""
     deadline = time.monotonic() + timeout_s
-    with Spinner(console, "Waiting for you to sign in to Instagram…"):
+    with Spinner(console, f"Waiting for you to sign in to {platform.label}…"):
         while time.monotonic() < deadline:
             if not context.pages:  # user closed the window
                 raise NotLoggedInError("The browser window was closed before signing in.")
-            if has_session_cookie(context):
+            if has_session_cookie(context, platform):
                 return
             time.sleep(_POLL_INTERVAL_S)
     wait = f"{timeout_s / 60:.0f} minutes" if timeout_s >= 120 else f"{timeout_s:.0f} seconds"
@@ -61,34 +75,41 @@ def _wait_for_login(context: BrowserContext, console: Console, timeout_s: float)
 
 
 @contextmanager
-def instagram_session(
+def platform_session(
+    platform: Platform,
     console: Console,
     headed: bool = False,
     login_timeout_s: float = LOGIN_TIMEOUT_S,
+    prepare: Optional[callable] = None,
 ) -> Iterator[BrowserContext]:
-    """Yield a browser context that is signed in to Instagram.
+    """Yield a browser context signed in to ``platform``.
 
-    If the profile has no session yet, a visible window is opened for a
-    one-time sign-in and the flow continues once the session cookie appears.
+    ``prepare`` is an optional hook run against the fresh context before the
+    login check (used to inject imported cookies). If the profile has no
+    session yet and the platform enforces login, a visible window is opened
+    for a one-time sign-in.
     """
+    profile = profile_dir(platform)
     with sync_playwright() as playwright:
-        context = _launch(playwright, headless=not headed)
+        context = _launch(playwright, profile, headless=not headed)
         try:
-            if not has_session_cookie(context):
+            if prepare is not None:
+                prepare(context)
+            if not has_session_cookie(context, platform):
                 console.warning_box(
-                    "Instagram sign-in required",
+                    f"{platform.label} sign-in required",
                     [
                         "ClipFetch uses its own browser profile, so you need to",
-                        "sign in to Instagram once. A browser window is opening —",
-                        "your session (not your password) is saved for next time.",
+                        f"sign in to {platform.label} once. A browser window is",
+                        "opening — your session (not your password) is saved.",
                     ],
                 )
                 if not headed:  # the login window must be visible
                     context.close()
-                    context = _launch(playwright, headless=False)
+                    context = _launch(playwright, profile, headless=False)
                 page = context.pages[0] if context.pages else context.new_page()
-                page.goto(LOGIN_URL)
-                _wait_for_login(context, console, login_timeout_s)
+                page.goto(platform.login_url)
+                _wait_for_login(context, platform, console, login_timeout_s)
                 console.success("Signed in — session saved for future runs.")
             yield context
         finally:

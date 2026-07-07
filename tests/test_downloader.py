@@ -4,8 +4,8 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 import pytest
 
-from clipfetch.downloader import DownloadPool
-from clipfetch.reels import Reel
+from clipfetch.downloader import DownloadPool, filename_for
+from clipfetch.model import Clip
 from clipfetch.ui import Console, MultiProgress
 
 
@@ -35,21 +35,34 @@ def video_server():
     httpd.shutdown()
 
 
-def _pool(tmp_path, workers=4):
-    progress = MultiProgress(Console(io.StringIO()), overall_total=3)
-    return DownloadPool(tmp_path, workers, progress), progress
+def _clip(ident, url):
+    return Clip("instagram", ident, url)
+
+
+def _pool(tmp_path, progress, workers=4):
+    return DownloadPool(tmp_path, "reel", workers, progress)
+
+
+def _progress():
+    return MultiProgress(Console(io.StringIO()), overall_total=3)
+
+
+def test_filename_is_deterministic_and_sanitised():
+    assert filename_for("reel", 1, _clip("ABC", "u")) == "reel_001_ABC.mp4"
+    assert filename_for("tiktok", 42, _clip("a/b?c", "u")) == "tiktok_042_abc.mp4"
 
 
 def test_parallel_downloads_write_complete_files(tmp_path, video_server):
-    reels = [Reel(f"CODE{i}", f"{video_server}/video/clip{i}") for i in range(3)]
-    pool, progress = _pool(tmp_path)
+    clips = [_clip(f"CODE{i}", f"{video_server}/video/clip{i}") for i in range(3)]
+    progress = _progress()
+    pool = _pool(tmp_path, progress)
     with progress:
-        for reel in reels:
-            pool.submit(reel)
+        for clip in clips:
+            pool.submit(clip)
         results = pool.wait()
 
     assert all(r.ok for r in results)
-    assert [r.reel for r in results] == reels  # results keep submit order
+    assert [r.clip for r in results] == clips  # results keep submit order
     for i, result in enumerate(results):
         assert result.path == tmp_path / f"reel_{i + 1:03d}_CODE{i}.mp4"
         assert result.path.read_bytes() == f"clip{i}".encode() * 5000
@@ -57,11 +70,23 @@ def test_parallel_downloads_write_complete_files(tmp_path, video_server):
     assert not list(tmp_path.glob("*.part"))  # no leftover temp files
 
 
-def test_failed_download_reports_error_and_cleans_up(tmp_path, video_server):
-    pool, progress = _pool(tmp_path)
+def test_existing_file_is_skipped_not_refetched(tmp_path, video_server):
+    (tmp_path / "reel_001_DONE.mp4").write_bytes(b"already here")
+    progress = _progress()
+    pool = _pool(tmp_path, progress)
     with progress:
-        pool.submit(Reel("GOOD", f"{video_server}/video/ok"))
-        pool.submit(Reel("BAD", f"{video_server}/missing"))
+        pool.submit(_clip("DONE", f"{video_server}/video/should_not_be_used"))
+        (result,) = pool.wait()
+    assert result.ok and result.skipped
+    assert (tmp_path / "reel_001_DONE.mp4").read_bytes() == b"already here"
+
+
+def test_failed_download_reports_error_and_cleans_up(tmp_path, video_server):
+    progress = _progress()
+    pool = _pool(tmp_path, progress)
+    with progress:
+        pool.submit(_clip("GOOD", f"{video_server}/video/ok"))
+        pool.submit(_clip("BAD", f"{video_server}/missing"))
         results = pool.wait()
 
     good, bad = results
