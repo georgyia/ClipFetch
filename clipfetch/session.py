@@ -15,6 +15,7 @@ from typing import Iterator
 
 from playwright.sync_api import BrowserContext, Playwright, sync_playwright
 
+from clipfetch.constants import USER_AGENT
 from clipfetch.errors import NotLoggedInError
 from clipfetch.ui import Console, Spinner
 
@@ -24,13 +25,6 @@ LOGIN_URL = INSTAGRAM_URL + "accounts/login/"
 LOGIN_TIMEOUT_S = 300
 _POLL_INTERVAL_S = 2
 
-# Instagram serves a login wall to browsers that advertise themselves as
-# headless, so headless runs claim the equivalent regular Chrome UA.
-_HEADLESS_USER_AGENT = (
-    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 "
-    "(KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36"
-)
-
 
 def _launch(playwright: Playwright, headless: bool) -> BrowserContext:
     PROFILE_DIR.mkdir(parents=True, exist_ok=True)
@@ -38,7 +32,7 @@ def _launch(playwright: Playwright, headless: bool) -> BrowserContext:
         PROFILE_DIR,
         headless=headless,
         viewport={"width": 1280, "height": 900},
-        user_agent=_HEADLESS_USER_AGENT if headless else None,
+        user_agent=USER_AGENT if headless else None,
     )
 
 

@@ -93,8 +93,11 @@ class ReelCollector:
         headers = response.headers
         if "application/json" not in headers.get("content-type", ""):
             return False
-        length = headers.get("content-length")
-        return not (length and int(length) > _MAX_JSON_BYTES)
+        try:
+            length = int(headers.get("content-length", 0))
+        except ValueError:
+            return False
+        return length <= _MAX_JSON_BYTES
 
 
 def _open_feed(context: BrowserContext, collector: ReelCollector) -> Page:

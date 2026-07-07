@@ -116,25 +116,59 @@ def main(argv: list[str] | None = None) -> int:
 
 
 def _run(opts: Options, console: Console) -> None:
-    """Collect reels from the feed and download them (wired up milestone by milestone)."""
+    """Collect reels from the feed and download them as they are found."""
+    import time
+
     # Imported lazily so --help and unit tests never need the browser stack.
     from clipfetch import reels, session
-    from clipfetch.ui import Spinner
-
-    with session.instagram_session(console, headed=opts.headed) as context:
-        with Spinner(console, f"Collecting reels… 0/{opts.reels}") as spinner:
-            found = reels.collect_reels(
-                context,
-                opts.reels,
-                on_reel=lambda reel: None,
-                on_progress=lambda n: spinner.update(
-                    f"Collecting reels… {n}/{opts.reels}"
-                ),
-            )
-        console.success(f"Collected {len(found)} of {opts.reels} reel(s).")
+    from clipfetch.downloader import DownloadPool
+    from clipfetch.errors import DownloadError
+    from clipfetch.ui import MultiProgress, Spinner, human_size
 
     if opts.dry_run:
+        with session.instagram_session(console, headed=opts.headed) as context:
+            with Spinner(console, f"Collecting reels… 0/{opts.reels}") as spinner:
+                found = reels.collect_reels(
+                    context,
+                    opts.reels,
+                    on_reel=lambda reel: None,
+                    on_progress=lambda n: spinner.update(
+                        f"Collecting reels… {n}/{opts.reels}"
+                    ),
+                )
+        console.success(f"Collected {len(found)} of {opts.reels} reel(s).")
         for reel in found:
             console.print(f"  {reel.shortcode}  {reel.video_url}")
         return
-    raise ClipFetchError("Downloading is not implemented yet.")
+
+    opts.out.mkdir(parents=True, exist_ok=True)
+    started = time.monotonic()
+    with session.instagram_session(console, headed=opts.headed) as context:
+        with MultiProgress(console, opts.reels) as progress:
+            pool = DownloadPool(opts.out, opts.workers, progress)
+            found = reels.collect_reels(
+                context,
+                opts.reels,
+                on_reel=pool.submit,
+                on_progress=lambda n: progress.set_status(
+                    f"Collecting reels… {n}/{opts.reels}"
+                ),
+            )
+            progress.set_status("Feed done — finishing downloads…")
+            results = pool.wait()
+            progress.set_status("")
+    elapsed = time.monotonic() - started
+
+    downloaded = [r for r in results if r.ok]
+    total_bytes = sum(r.size for r in downloaded)
+    for result in results:
+        if not result.ok:
+            console.error(f"{result.reel.shortcode}: {result.error}")
+    if not downloaded:
+        raise DownloadError("No reels could be downloaded.")
+    if len(found) < opts.reels:
+        console.info(f"The feed only yielded {len(found)} reels this session.")
+    console.success(
+        f"Downloaded {len(downloaded)} reel(s) to {opts.out.resolve()} "
+        f"({human_size(total_bytes)} in {elapsed:.0f}s)."
+    )

@@ -167,6 +167,7 @@ class MultiProgress:
         self._console = console
         self._overall_total = overall_total
         self._tasks: dict[int, _Task] = {}
+        self._status = ""
         self._lock = threading.Lock()
         self._stop = threading.Event()
         self._thread: threading.Thread | None = None
@@ -186,6 +187,14 @@ class MultiProgress:
             self._render()  # final frame
             self._console.stream.write(_SHOW_CURSOR)
             self._console.stream.flush()
+
+    def set_status(self, text: str) -> None:
+        """Show a one-line status (e.g. collection progress) above the bars."""
+        with self._lock:
+            changed = text != self._status
+            self._status = text
+        if changed and not self._console.ansi:
+            self._console.info(text)
 
     def add(self, task_id: int, label: str, total: int = 0) -> None:
         with self._lock:
@@ -225,6 +234,10 @@ class MultiProgress:
         if failed:
             overall += f" {RED}({failed} failed){RESET}"
         lines.append(overall)
+        with self._lock:
+            status = self._status
+        if status:
+            lines.append(f"  {DIM}{status}{RESET}")
         for _, task in tasks:
             if task.finished:
                 continue  # keep the block compact: only active downloads
