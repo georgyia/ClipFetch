@@ -12,7 +12,7 @@ class Clipfetch < Formula
 
   desc "Download short-form videos from your feed to watch offline"
   homepage "https://github.com/georgyia/ClipFetch"
-  url "https://files.pythonhosted.org/packages/source/c/clipfetch/clipfetch-0.1.0.tar.gz"
+  url "https://files.pythonhosted.org/packages/source/c/clipfetch/clipfetch-0.2.0.tar.gz"
   sha256 "0000000000000000000000000000000000000000000000000000000000000000"
   license "MIT"
 

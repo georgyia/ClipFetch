@@ -15,12 +15,17 @@ ready to watch on a flight, on the train, or anywhere without a connection.
 ## Features
 
 - **One command** — `clipfetch -reels N` downloads N reels from your personal Reels feed.
+- **Accounts too** — `clipfetch -reels N @username` grabs a specific account's reels.
 - **Fast** — reels are downloaded in parallel while the feed is still being scrolled.
 - **Interactive** — live spinners and per-download progress bars in the terminal.
+- **Watch offline** — `clipfetch watch` plays a downloaded folder one clip after another.
+- **Picks up where it left off** — re-running skips reels already in the folder.
+- **Quality control** — `--quality high|medium|low` chooses the rendition.
 - **Self-contained** — no third-party downloader libraries; the extraction and download
   logic is built from scratch on top of a single dependency (Playwright, the browser driver).
 - **Your session, your feed** — uses a dedicated local browser profile you sign in to once;
-  no passwords stored, no cookie scraping from your real browser.
+  no passwords stored. Optionally reuse your real Chrome login with `--import-cookies chrome`.
+- **More platforms** — TikTok is available (`-tiktoks N`, experimental — see below).
 
 ## Installation
 
@@ -48,11 +53,27 @@ playwright install chromium
 > stored by ClipFetch itself.
 
 ```bash
-clipfetch -reels 25              # download the next 25 reels from your feed into ./reels/
-clipfetch -reels 10 --out ~/clips  # choose the output folder
-clipfetch -reels 5 --dry-run     # only list the video URLs, download nothing
-clipfetch --help                 # all options
+clipfetch -reels 25                  # next 25 reels from your feed into ./reels/
+clipfetch -reels 10 @nasa            # 10 reels from a specific account
+clipfetch -reels 10 --out ~/clips    # choose the output folder
+clipfetch -reels 5 --quality low     # smaller files where a choice exists
+clipfetch -reels 5 --dry-run         # only list the video URLs, download nothing
+clipfetch -reels 25 --import-cookies chrome   # reuse your real Chrome login (macOS)
+clipfetch watch reels                # play the downloaded folder in sequence
+clipfetch watch reels --shuffle      # …in random order
+clipfetch --help                     # all options
 ```
+
+Re-running the same command tops up the folder — reels already downloaded are skipped.
+
+### Other platforms
+
+- **TikTok** (`clipfetch -tiktoks 25`) — *experimental*. Extraction is reliable and
+  `--dry-run` lists real video URLs, but TikTok's anti-bot blocks most automated
+  downloads. Use `--dry-run` to get URLs you can hand to another tool.
+- **YouTube Shorts** — not available: YouTube ciphers its stream URLs (they need a
+  signature computed by YouTube's player JavaScript), which is outside ClipFetch's
+  browser-driver-only design. See [issue #2](https://github.com/georgyia/ClipFetch/issues/2).
 
 ## How it works
 
@@ -60,6 +81,10 @@ clipfetch --help                 # all options
 2. Opens `instagram.com/reels/` and listens to the network responses the feed loads.
 3. Collects direct video URLs from the feed API responses while auto-scrolling.
 4. Streams the videos to disk in parallel worker threads as soon as each URL is found.
+
+For a single account, ClipFetch harvests reel shortcodes from the profile grid and opens
+each permalink to capture its playable URL. TikTok clips are fetched through the live
+browser session because their URLs are bound to it.
 
 ## Disclaimer
 
@@ -76,8 +101,7 @@ own feed to watch them offline, exactly as you could in the app.
 ## Contributing
 
 Issues and pull requests are welcome — see the
-[open tickets](https://github.com/georgyia/ClipFetch/issues) for planned features
-(TikTok, YouTube Shorts, per-account downloads, and more).
+[open tickets](https://github.com/georgyia/ClipFetch/issues) for planned work.
 
 ## License
 
