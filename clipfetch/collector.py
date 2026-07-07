@@ -110,6 +110,17 @@ def collect(
     :class:`ExtractionError` if the feed stops yielding new clips for
     ``stall_timeout_s`` seconds before the target is reached.
     """
+    # Account (@user) mode may need a bespoke strategy; let the platform take
+    # over if it provides one, otherwise fall through to feed scrolling.
+    if target:
+        clips = platform.collect_target(
+            context, target, quality, count, on_clip, already_have or set()
+        )
+        if clips is not None:
+            if on_progress:
+                on_progress(len(clips))
+            return clips
+
     # The page must exist before the collector so the response handler's
     # ``active`` check can read its URL the moment navigation starts firing.
     page = _fresh_feed_page(context)
@@ -118,7 +129,7 @@ def collect(
         quality,
         count,
         on_clip,
-        active=lambda: platform.is_on_feed(_current_url(page)),
+        active=lambda: platform.is_on_feed(_current_url(page), target),
         already_have=already_have,
     )
     page.on("response", collector.handle_response)
@@ -135,9 +146,15 @@ def collect(
     last_progress = 0
     last_new_clip_at = time.monotonic()
     while not collector.full:
-        # Wheel gestures advance snap-scrolled feeds without needing keyboard
-        # focus (ArrowDown is ignored until an item is focused).
+        # Wheel gestures advance snap-scrolled feeds (the vertical /reels/
+        # player) without needing keyboard focus; the window scroll triggers
+        # infinite-scroll pagination on profile grids (@account mode). Doing
+        # both covers either layout.
         page.mouse.wheel(0, viewport["height"])
+        try:
+            page.evaluate("window.scrollBy(0, document.body.scrollHeight)")
+        except Exception:  # page navigating/closed mid-scroll
+            pass
         page.wait_for_timeout(int(_SCROLL_PAUSE_S * 1000))
 
         found = len(collector.clips)

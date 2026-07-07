@@ -61,3 +61,29 @@ def test_feed_url_and_target_routing():
     assert instagram.feed_url("@nasa") == "https://www.instagram.com/nasa/reels/"
     assert instagram.is_on_feed("https://www.instagram.com/reels/?x=1")
     assert not instagram.is_on_feed("https://www.instagram.com/")
+
+
+class _FakeGridPage:
+    """Minimal page double: serves reel hrefs and ignores scroll calls."""
+
+    def __init__(self, hrefs):
+        self._hrefs = hrefs
+
+    def eval_on_selector_all(self, selector, script):
+        return self._hrefs
+
+    def mouse(self):  # pragma: no cover - attribute placeholder
+        ...
+
+    wheel = staticmethod(lambda *a, **k: None)
+    evaluate = staticmethod(lambda *a, **k: None)
+    wait_for_timeout = staticmethod(lambda *a, **k: None)
+
+
+def test_harvest_shortcodes_dedupes_and_skips_known():
+    page = _FakeGridPage(
+        ["/reel/AAA/", "/reel/BBB/?x=1", "/reel/AAA/", "/p/PHOTO/", "/reel/CCC/"]
+    )
+    page.mouse = type("M", (), {"wheel": staticmethod(lambda *a, **k: None)})()
+    codes = instagram._harvest_shortcodes(page, count=10, already_have={"BBB"})
+    assert codes == ["AAA", "CCC"]  # BBB already have; photo link ignored

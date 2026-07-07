@@ -34,10 +34,18 @@ class Platform(ABC):
     def feed_url(self, target: Optional[str] = None) -> str:
         """URL of the feed to scroll (optionally for a specific account)."""
 
-    def is_on_feed(self, url: str) -> bool:
+    def is_on_feed(self, url: str, target: Optional[str] = None) -> bool:
         """Whether ``url`` is (still) the feed we opened — gates collection."""
-        return url.startswith(self.feed_url().split("?", 1)[0])
+        return url.startswith(self.feed_url(target).split("?", 1)[0])
 
     @abstractmethod
     def find_clips(self, payload: Any, quality: Quality) -> Iterator[Clip]:
         """Yield every downloadable clip found in one API response payload."""
+
+    def collect_target(self, context, target, quality, count, on_clip, already_have):
+        """Collect clips for a single account (``@user`` mode).
+
+        Return ``None`` to fall back to the generic feed-scrolling collector;
+        override when a platform needs a bespoke per-account strategy.
+        """
+        return None

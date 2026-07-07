@@ -21,6 +21,12 @@ def test_workers_capped_by_count():
     assert parse_args(["-reels", "100"]).workers == 8
 
 
+def test_account_target_is_parsed_and_stripped():
+    assert parse_args(["-reels", "10"]).target is None
+    assert parse_args(["-reels", "10", "@nasa"]).target == "nasa"
+    assert parse_args(["-reels", "10", "nasa"]).target == "nasa"
+
+
 def test_custom_out_quality_and_flags():
     opts = parse_args(
         ["-reels", "5", "--out", "clips", "--quality", "low", "--headed", "--dry-run"]

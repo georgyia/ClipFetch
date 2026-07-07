@@ -22,6 +22,7 @@ class Options:
 
     platform: Platform
     count: int
+    target: Optional[str]
     out: Path
     workers: int
     quality: Quality
@@ -57,6 +58,12 @@ def build_parser() -> argparse.ArgumentParser:
             type=_positive_int,
             help=f"number of {platform.noun}s to download from {platform.label}",
         )
+    parser.add_argument(
+        "target",
+        nargs="?",
+        metavar="@ACCOUNT",
+        help="limit to one account's clips (supported sources only)",
+    )
     parser.add_argument(
         "--out",
         metavar="DIR",
@@ -106,9 +113,14 @@ def parse_args(argv: Optional[list[str]] = None) -> Options:
     if args.workers > MAX_WORKERS:
         parser.error(f"--workers must be at most {MAX_WORKERS}")
 
+    target = args.target.lstrip("@") if args.target else None
+    if target and not platform.supports_target:
+        parser.error(f"{platform.label} does not support downloading a single account")
+
     return Options(
         platform=platform,
         count=count,
+        target=target,
         out=args.out or Path(platform.flag),
         workers=min(args.workers, count),
         quality=Quality(args.quality),
@@ -150,6 +162,8 @@ def _run(opts: Options, console: Console) -> None:
 
     platform = opts.platform
     noun = platform.noun
+    source = f"@{opts.target}" if opts.target else f"your {platform.label} feed"
+    console.info(f"Source: {source}")
 
     if opts.dry_run:
         with session.platform_session(platform, console, headed=opts.headed) as context:
@@ -157,6 +171,7 @@ def _run(opts: Options, console: Console) -> None:
                 found = collector.collect(
                     context, platform, opts.quality, opts.count,
                     on_clip=lambda clip: None,
+                    target=opts.target,
                     on_progress=lambda n: spinner.update(
                         f"Collecting {noun}s… {n}/{opts.count}"
                     ),
@@ -179,6 +194,7 @@ def _run(opts: Options, console: Console) -> None:
             found = collector.collect(
                 context, platform, opts.quality, opts.count,
                 on_clip=pool.submit,
+                target=opts.target,
                 already_have=already_have,
                 on_progress=lambda n: progress.set_status(
                     f"Collecting {noun}s… {n}/{opts.count}"
