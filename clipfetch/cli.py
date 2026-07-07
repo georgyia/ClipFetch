@@ -29,6 +29,7 @@ class Options:
     quality: Quality
     headed: bool
     dry_run: bool
+    import_cookies: Optional[str]
 
 
 def _positive_int(value: str) -> int:
@@ -89,6 +90,12 @@ def build_parser() -> argparse.ArgumentParser:
         help="preferred rendition when several exist (default: high)",
     )
     parser.add_argument(
+        "--import-cookies",
+        metavar="BROWSER",
+        choices=["chrome"],
+        help="reuse an existing login from your real browser (macOS Chrome)",
+    )
+    parser.add_argument(
         "--headed",
         action="store_true",
         help="show the browser window while collecting",
@@ -131,6 +138,7 @@ def parse_args(argv: Optional[list[str]] = None) -> Options:
         quality=Quality(args.quality),
         headed=args.headed,
         dry_run=args.dry_run,
+        import_cookies=args.import_cookies,
     )
 
 
@@ -174,6 +182,28 @@ def main(argv: Optional[list[str]] = None) -> int:
     return 0
 
 
+def _cookie_importer(opts: Options, platform: Platform, console: Console):
+    """Build a session-prepare hook that injects imported browser cookies."""
+    if not opts.import_cookies:
+        return None
+
+    def prepare(context) -> None:
+        from clipfetch.cookies import CookieImportError, import_session_cookies
+
+        try:
+            cookies = import_session_cookies(platform, opts.import_cookies)
+            context.add_cookies(cookies)
+            console.success(
+                f"Imported {len(cookies)} {platform.label} cookie(s) from "
+                f"{opts.import_cookies}."
+            )
+        except CookieImportError as err:
+            console.error(f"Cookie import failed: {err}")
+            console.info("Falling back to ClipFetch's own sign-in.")
+
+    return prepare
+
+
 def _run(opts: Options, console: Console) -> None:
     """Collect clips from the feed and download them as they are found."""
     import time
@@ -188,6 +218,8 @@ def _run(opts: Options, console: Console) -> None:
     noun = platform.noun
     source = f"@{opts.target}" if opts.target else f"your {platform.label} feed"
     console.info(f"Source: {source}")
+
+    prepare = _cookie_importer(opts, platform, console)
     if platform.experimental and not opts.dry_run:
         console.info(
             f"{platform.label} support is experimental — extraction is reliable, "
@@ -195,7 +227,7 @@ def _run(opts: Options, console: Console) -> None:
         )
 
     if opts.dry_run:
-        with session.platform_session(platform, console, headed=opts.headed) as context:
+        with session.platform_session(platform, console, headed=opts.headed, prepare=prepare) as context:
             with Spinner(console, f"Collecting {noun}s… 0/{opts.count}") as spinner:
                 found = collector.collect(
                     context, platform, opts.quality, opts.count,
@@ -217,7 +249,7 @@ def _run(opts: Options, console: Console) -> None:
         console.info(f"Skipping {len(already_have)} {noun}(s) already in {opts.out}.")
 
     started = time.monotonic()
-    with session.platform_session(platform, console, headed=opts.headed) as context:
+    with session.platform_session(platform, console, headed=opts.headed, prepare=prepare) as context:
         if platform.needs_browser_download:
             from clipfetch import browser_download
 
