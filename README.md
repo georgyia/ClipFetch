@@ -1,5 +1,7 @@
 # ClipFetch
 
+[![CI](https://github.com/georgyia/ClipFetch/actions/workflows/ci.yml/badge.svg)](https://github.com/georgyia/ClipFetch/actions/workflows/ci.yml)
+
 Download short-form videos from your feed to watch offline — straight from the terminal.
 
 ```
