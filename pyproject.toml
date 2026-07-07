@@ -1,0 +1,42 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "clipfetch"
+description = "Download short-form videos from your feed to watch offline, straight from the terminal."
+readme = "README.md"
+requires-python = ">=3.9"
+license = { text = "MIT" }
+authors = [{ name = "georgyia" }]
+keywords = ["instagram", "reels", "downloader", "cli", "short-form"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Environment :: Console",
+    "Intended Audience :: End Users/Desktop",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Topic :: Multimedia :: Video",
+]
+dependencies = ["playwright>=1.40"]
+dynamic = ["version"]
+
+[project.urls]
+Homepage = "https://github.com/georgyia/ClipFetch"
+Issues = "https://github.com/georgyia/ClipFetch/issues"
+
+[project.scripts]
+clipfetch = "clipfetch.cli:main"
+
+[project.optional-dependencies]
+dev = ["pytest>=7"]
+
+[tool.setuptools.dynamic]
+version = { attr = "clipfetch.__version__" }
+
+[tool.setuptools.packages.find]
+include = ["clipfetch*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
