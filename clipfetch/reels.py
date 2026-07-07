@@ -58,11 +58,22 @@ def find_reels(node: Any) -> Iterator[Reel]:
 
 
 class ReelCollector:
-    """Accumulates unique reels from feed responses up to a limit."""
+    """Accumulates unique reels from feed responses up to a limit.
 
-    def __init__(self, limit: int, on_reel: Callable[[Reel], None]) -> None:
+    ``active`` gates collection: responses that arrive while the page is not
+    on the Reels feed (e.g. leftover home-feed requests right after login)
+    also contain videos and must not be picked up.
+    """
+
+    def __init__(
+        self,
+        limit: int,
+        on_reel: Callable[[Reel], None],
+        active: Optional[Callable[[], bool]] = None,
+    ) -> None:
         self._limit = limit
         self._on_reel = on_reel
+        self._active = active or (lambda: True)
         self._seen: set[str] = set()
         self.reels: list[Reel] = []
 
@@ -71,7 +82,7 @@ class ReelCollector:
         return len(self.reels) >= self._limit
 
     def handle_response(self, response: Response) -> None:
-        if self.full or not self._looks_like_api_json(response):
+        if self.full or not self._active() or not self._looks_like_api_json(response):
             return
         try:
             payload = response.json()
@@ -100,8 +111,16 @@ class ReelCollector:
         return length <= _MAX_JSON_BYTES
 
 
-def _open_feed(context: BrowserContext, collector: ReelCollector) -> Page:
-    page = context.pages[0] if context.pages else context.new_page()
+def _open_feed(context: BrowserContext, count: int, on_reel: Callable[[Reel], None]) -> tuple[Page, ReelCollector]:
+    # A fresh page keeps traffic from previously opened pages (the home feed
+    # right after login, most notably) away from the collector; the leftovers
+    # are closed so they stop loading their own feeds in the background.
+    page = context.new_page()
+    for other in list(context.pages):
+        if other is not page:
+            other.close()
+
+    collector = ReelCollector(count, on_reel, active=lambda: page.url.startswith(REELS_URL))
     page.on("response", collector.handle_response)
     page.goto(REELS_URL, wait_until="domcontentloaded")
     if "/accounts/login" in page.url:
@@ -109,7 +128,7 @@ def _open_feed(context: BrowserContext, collector: ReelCollector) -> Page:
             "Instagram sent us to the login page — your saved session has "
             "expired. Run again with --headed and sign in."
         )
-    return page
+    return page, collector
 
 
 def collect_reels(
@@ -125,13 +144,16 @@ def collect_reels(
     :class:`ExtractionError` if the feed stops yielding new reels for
     ``stall_timeout_s`` seconds before the target is reached.
     """
-    collector = ReelCollector(count, on_reel)
-    page = _open_feed(context, collector)
+    page, collector = _open_feed(context, count, on_reel)
+    viewport = page.viewport_size or {"width": 1280, "height": 900}
+    page.mouse.move(viewport["width"] / 2, viewport["height"] / 2)
 
     last_progress = 0
     last_new_reel_at = time.monotonic()
     while not collector.full:
-        page.keyboard.press("ArrowDown")  # advance the feed like a viewer would
+        # Wheel gestures advance the snap-scrolled feed without needing
+        # keyboard focus (ArrowDown is ignored until a reel is focused).
+        page.mouse.wheel(0, viewport["height"])
         page.wait_for_timeout(_SCROLL_PAUSE_S * 1000)
 
         found = len(collector.reels)

@@ -74,6 +74,20 @@ def test_collector_dedupes_and_respects_limit():
     assert seen == collector.reels  # every reel reported exactly once
 
 
+def test_collector_ignores_responses_while_inactive():
+    """Home-feed responses arriving before/after the reels page must be dropped."""
+    on_reels_page = False
+    collector = ReelCollector(limit=5, on_reel=lambda r: None,
+                              active=lambda: on_reels_page)
+
+    collector.handle_response(FakeResponse(FEED_PAYLOAD))  # still on home feed
+    assert collector.reels == []
+
+    on_reels_page = True
+    collector.handle_response(FakeResponse(FEED_PAYLOAD))
+    assert [r.shortcode for r in collector.reels] == ["ABC123", "DEF456"]
+
+
 def test_collector_ignores_non_json_and_foreign_responses():
     collector = ReelCollector(limit=5, on_reel=lambda r: None)
 
