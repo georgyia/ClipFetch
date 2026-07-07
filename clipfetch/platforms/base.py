@@ -29,6 +29,11 @@ class Platform(ABC):
     login_url: str
     session_cookie: Optional[str] = None
     supports_target: bool = False  # accepts "@username"
+    # When True, clips are fetched through the live browser session (their URLs
+    # are fingerprint-bound) instead of the parallel urllib downloader.
+    needs_browser_download: bool = False
+    # Extraction works but downloads are unreliable (platform anti-bot).
+    experimental: bool = False
 
     @abstractmethod
     def feed_url(self, target: Optional[str] = None) -> str:

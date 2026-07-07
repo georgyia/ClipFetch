@@ -56,11 +56,12 @@ def build_parser() -> argparse.ArgumentParser:
     )
     source = parser.add_argument_group("sources (choose one)")
     for platform in platforms.ALL:
+        note = " (experimental)" if platform.experimental else ""
         source.add_argument(
             f"-{platform.flag}",
             metavar="COUNT",
             type=_positive_int,
-            help=f"number of {platform.noun}s to download from {platform.label}",
+            help=f"number of {platform.noun}s to download from {platform.label}{note}",
         )
     parser.add_argument(
         "target",
@@ -187,6 +188,11 @@ def _run(opts: Options, console: Console) -> None:
     noun = platform.noun
     source = f"@{opts.target}" if opts.target else f"your {platform.label} feed"
     console.info(f"Source: {source}")
+    if platform.experimental and not opts.dry_run:
+        console.info(
+            f"{platform.label} support is experimental — extraction is reliable, "
+            "but downloads are often blocked by anti-bot. Try --dry-run to list URLs."
+        )
 
     if opts.dry_run:
         with session.platform_session(platform, console, headed=opts.headed) as context:
@@ -212,20 +218,39 @@ def _run(opts: Options, console: Console) -> None:
 
     started = time.monotonic()
     with session.platform_session(platform, console, headed=opts.headed) as context:
-        with MultiProgress(console, opts.count) as progress:
-            pool = DownloadPool(opts.out, noun, opts.workers, progress)
-            found = collector.collect(
-                context, platform, opts.quality, opts.count,
-                on_clip=pool.submit,
-                target=opts.target,
-                already_have=already_have,
-                on_progress=lambda n: progress.set_status(
-                    f"Collecting {noun}s… {n}/{opts.count}"
-                ),
-            )
-            progress.set_status("Feed done — finishing downloads…")
-            results = pool.wait()
-            progress.set_status("")
+        if platform.needs_browser_download:
+            from clipfetch import browser_download
+
+            with Spinner(console, f"Collecting {noun}s… 0/{opts.count}") as spinner:
+                found = collector.collect(
+                    context, platform, opts.quality, opts.count,
+                    on_clip=lambda clip: None,
+                    target=opts.target,
+                    already_have=already_have,
+                    on_progress=lambda n: spinner.update(
+                        f"Collecting {noun}s… {n}/{opts.count}"
+                    ),
+                )
+            console.info(f"Downloading {len(found)} {noun}(s) through the browser…")
+            results = browser_download.download_all(context, found, opts.out, noun, console)
+        else:
+            headers = {"Cookie": session.cookie_header(context, platform)}
+            with MultiProgress(console, opts.count) as progress:
+                pool = DownloadPool(
+                    opts.out, noun, opts.workers, progress, extra_headers=headers
+                )
+                found = collector.collect(
+                    context, platform, opts.quality, opts.count,
+                    on_clip=pool.submit,
+                    target=opts.target,
+                    already_have=already_have,
+                    on_progress=lambda n: progress.set_status(
+                        f"Collecting {noun}s… {n}/{opts.count}"
+                    ),
+                )
+                progress.set_status("Feed done — finishing downloads…")
+                results = pool.wait()
+                progress.set_status("")
     elapsed = time.monotonic() - started
 
     downloaded = [r for r in results if r.ok]
@@ -234,6 +259,12 @@ def _run(opts: Options, console: Console) -> None:
         if not result.ok:
             console.error(f"{result.clip.ident}: {result.error}")
     if not downloaded:
+        if platform.experimental:
+            raise DownloadError(
+                f"No {noun}s could be downloaded — {platform.label} blocked the "
+                "requests (anti-bot). Extraction still works: try --dry-run to get "
+                "the video URLs."
+            )
         raise DownloadError(f"No {noun}s could be downloaded.")
     if len(found) < opts.count:
         console.info(f"The feed only yielded {len(found)} {noun}s this session.")

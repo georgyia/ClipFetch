@@ -78,11 +78,17 @@ class DownloadPool:
     """
 
     def __init__(
-        self, out_dir: Path, noun: str, workers: int, progress: MultiProgress
+        self,
+        out_dir: Path,
+        noun: str,
+        workers: int,
+        progress: MultiProgress,
+        extra_headers: Optional[dict] = None,
     ) -> None:
         self._out_dir = out_dir
         self._noun = noun
         self._progress = progress
+        self._extra_headers = extra_headers or {}
         self._executor = ThreadPoolExecutor(workers, thread_name_prefix="download")
         self._futures: list[Future[DownloadResult]] = []
         self._indexes = itertools.count(1)
@@ -118,7 +124,7 @@ class DownloadPool:
         return DownloadResult(clip, path=target, size=size)
 
     def _fetch(self, index: int, clip: Clip, destination: Path) -> int:
-        headers = {"User-Agent": USER_AGENT}
+        headers = {"User-Agent": USER_AGENT, **self._extra_headers}
         if clip.referer:
             headers["Referer"] = clip.referer
         request = urllib.request.Request(clip.video_url, headers=headers)

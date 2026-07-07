@@ -46,6 +46,17 @@ def _launch(playwright: Playwright, profile: Path, headless: bool) -> BrowserCon
     )
 
 
+def cookie_header(context: BrowserContext, platform: Platform) -> str:
+    """A ``Cookie:`` header string for the platform's site.
+
+    Some CDNs (TikTok) reject the browser-free downloader without the session's
+    cookies; capturing them lets urllib present the same identity.
+    """
+    url = f"https://www.{platform.host}/"
+    pairs = [f"{c['name']}={c['value']}" for c in context.cookies(url) if c.get("value")]
+    return "; ".join(pairs)
+
+
 def has_session_cookie(context: BrowserContext, platform: Platform) -> bool:
     """Whether the profile holds a valid session cookie for the platform."""
     if platform.session_cookie is None:
