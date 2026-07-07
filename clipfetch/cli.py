@@ -117,4 +117,8 @@ def main(argv: list[str] | None = None) -> int:
 
 def _run(opts: Options, console: Console) -> None:
     """Collect reels from the feed and download them (wired up milestone by milestone)."""
-    raise ClipFetchError("Reel downloading is not implemented yet.")
+    # Imported lazily so --help and unit tests never need the browser stack.
+    from clipfetch import session
+
+    with session.instagram_session(console, headed=opts.headed):
+        raise ClipFetchError("Reel extraction is not implemented yet.")
