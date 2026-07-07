@@ -88,7 +88,7 @@ class Console:
 
     def warning_box(self, title: str, lines: list[str]) -> None:
         """A bordered, hard-to-miss warning block."""
-        width = max(len(title), *(len(line) for line in lines)) + 2
+        width = max(len(line) for line in [title, *lines]) + 2
         top = "┌" + "─" * width + "┐"
         bottom = "└" + "─" * width + "┘"
         self.print(self._style(top, YELLOW))

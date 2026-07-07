@@ -21,6 +21,12 @@ def test_human_size():
     assert human_size(3.2 * 1024**3) == "3.2 GB"
 
 
+def test_warning_box_without_body_lines():
+    stream = io.StringIO()
+    Console(stream).warning_box("Just a title", [])
+    assert "Just a title" in stream.getvalue()
+
+
 def test_console_plain_without_tty():
     stream = io.StringIO()  # not a TTY -> no ANSI codes
     console = Console(stream)
