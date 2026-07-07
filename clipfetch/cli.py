@@ -118,7 +118,23 @@ def main(argv: list[str] | None = None) -> int:
 def _run(opts: Options, console: Console) -> None:
     """Collect reels from the feed and download them (wired up milestone by milestone)."""
     # Imported lazily so --help and unit tests never need the browser stack.
-    from clipfetch import session
+    from clipfetch import reels, session
+    from clipfetch.ui import Spinner
 
-    with session.instagram_session(console, headed=opts.headed):
-        raise ClipFetchError("Reel extraction is not implemented yet.")
+    with session.instagram_session(console, headed=opts.headed) as context:
+        with Spinner(console, f"Collecting reels… 0/{opts.reels}") as spinner:
+            found = reels.collect_reels(
+                context,
+                opts.reels,
+                on_reel=lambda reel: None,
+                on_progress=lambda n: spinner.update(
+                    f"Collecting reels… {n}/{opts.reels}"
+                ),
+            )
+        console.success(f"Collected {len(found)} of {opts.reels} reel(s).")
+
+    if opts.dry_run:
+        for reel in found:
+            console.print(f"  {reel.shortcode}  {reel.video_url}")
+        return
+    raise ClipFetchError("Downloading is not implemented yet.")
