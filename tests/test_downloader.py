@@ -4,7 +4,12 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 import pytest
 
-from clipfetch.downloader import DownloadPool, filename_for
+from clipfetch.downloader import (
+    DownloadPool,
+    clean_partials,
+    existing_idents,
+    filename_for,
+)
 from clipfetch.model import Clip
 from clipfetch.ui import Console, MultiProgress
 
@@ -50,6 +55,22 @@ def _progress():
 def test_filename_is_deterministic_and_sanitised():
     assert filename_for("reel", 1, _clip("ABC", "u")) == "reel_001_ABC.mp4"
     assert filename_for("tiktok", 42, _clip("a/b?c", "u")) == "tiktok_042_abc.mp4"
+
+
+def test_existing_idents_scans_completed_downloads(tmp_path):
+    (tmp_path / "reel_001_ABC.mp4").write_bytes(b"x")
+    (tmp_path / "reel_002_DEF.mp4").write_bytes(b"y")
+    (tmp_path / "reel_003_EMPTY.mp4").write_bytes(b"")  # zero-byte: not complete
+    (tmp_path / "tiktok_001_OTHER.mp4").write_bytes(b"z")  # different noun
+    assert existing_idents(tmp_path, "reel") == {"ABC", "DEF"}
+
+
+def test_clean_partials_removes_only_part_files(tmp_path):
+    (tmp_path / "reel_001_ABC.mp4").write_bytes(b"keep")
+    (tmp_path / "reel_002_DEF.part").write_bytes(b"junk")
+    assert clean_partials(tmp_path) == 1
+    assert (tmp_path / "reel_001_ABC.mp4").exists()
+    assert not list(tmp_path.glob("*.part"))
 
 
 def test_parallel_downloads_write_complete_files(tmp_path, video_server):

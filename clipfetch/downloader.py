@@ -42,8 +42,32 @@ class DownloadResult:
 
 def filename_for(noun: str, index: int, clip: Clip) -> str:
     """Deterministic filename so re-runs can recognise existing downloads."""
-    ident = _SAFE_IDENT.sub("", clip.ident) or "clip"
-    return f"{noun}_{index:03d}_{ident}.mp4"
+    return f"{noun}_{index:03d}_{safe_ident(clip.ident)}.mp4"
+
+
+def safe_ident(ident: str) -> str:
+    """Filesystem-safe form of a clip id (platform ids are already URL-safe)."""
+    return _SAFE_IDENT.sub("", ident) or "clip"
+
+
+def existing_idents(out_dir: Path, noun: str) -> set[str]:
+    """Ids already fully downloaded in ``out_dir`` (``<noun>_<n>_<id>.mp4``)."""
+    pattern = re.compile(rf"^{re.escape(noun)}_\d+_(.+)\.mp4$")
+    found = set()
+    for path in out_dir.glob(f"{noun}_*.mp4"):
+        match = pattern.match(path.name)
+        if match and path.stat().st_size > 0:
+            found.add(match.group(1))
+    return found
+
+
+def clean_partials(out_dir: Path) -> int:
+    """Remove leftover ``.part`` files from interrupted runs. Returns the count."""
+    removed = 0
+    for path in out_dir.glob("*.part"):
+        path.unlink(missing_ok=True)
+        removed += 1
+    return removed
 
 
 class DownloadPool:

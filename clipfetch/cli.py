@@ -144,7 +144,7 @@ def _run(opts: Options, console: Console) -> None:
 
     # Imported lazily so --help and unit tests never need the browser stack.
     from clipfetch import collector, session
-    from clipfetch.downloader import DownloadPool
+    from clipfetch.downloader import DownloadPool, clean_partials, existing_idents
     from clipfetch.errors import DownloadError
     from clipfetch.ui import MultiProgress, Spinner, human_size
 
@@ -167,6 +167,11 @@ def _run(opts: Options, console: Console) -> None:
         return
 
     opts.out.mkdir(parents=True, exist_ok=True)
+    clean_partials(opts.out)
+    already_have = existing_idents(opts.out, noun)
+    if already_have:
+        console.info(f"Skipping {len(already_have)} {noun}(s) already in {opts.out}.")
+
     started = time.monotonic()
     with session.platform_session(platform, console, headed=opts.headed) as context:
         with MultiProgress(console, opts.count) as progress:
@@ -174,6 +179,7 @@ def _run(opts: Options, console: Console) -> None:
             found = collector.collect(
                 context, platform, opts.quality, opts.count,
                 on_clip=pool.submit,
+                already_have=already_have,
                 on_progress=lambda n: progress.set_status(
                     f"Collecting {noun}s… {n}/{opts.count}"
                 ),
