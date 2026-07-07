@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import sys
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional
@@ -45,7 +46,10 @@ def build_parser() -> argparse.ArgumentParser:
         prog="clipfetch",
         description="Download short-form videos from your feed to watch offline.",
         epilog=(
-            "example: clipfetch -reels 25\n"
+            "examples:\n"
+            "  clipfetch -reels 25            download 25 reels from your feed\n"
+            "  clipfetch -reels 10 @nasa      download an account's reels\n"
+            "  clipfetch watch reels          play a downloaded folder\n"
             "For personal use only — see the README for the full disclaimer."
         ),
         formatter_class=argparse.RawDescriptionHelpFormatter,
@@ -129,15 +133,34 @@ def parse_args(argv: Optional[list[str]] = None) -> Options:
     )
 
 
-def main(argv: Optional[list[str]] = None) -> int:
+def _run_watch(args: list[str], console: Console) -> int:
+    from clipfetch.watcher import watch
+
+    parser = argparse.ArgumentParser(prog="clipfetch watch")
+    parser.add_argument("dir", nargs="?", default="reels", type=Path,
+                        help="folder of downloaded clips (default: ./reels)")
+    parser.add_argument("--shuffle", action="store_true", help="play in random order")
     try:
-        opts = parse_args(argv)
-    except SystemExit as exit_:  # argparse already printed help/error text
+        parsed = parser.parse_args(args)
+    except SystemExit as exit_:
         return int(exit_.code or 0)
+    return watch(parsed.dir, console, shuffle=parsed.shuffle)
+
+
+def main(argv: Optional[list[str]] = None) -> int:
+    args = sys.argv[1:] if argv is None else argv
 
     console = Console()
     console.banner(__version__)
     console.dim("Personal use only — respect creators and platform Terms of Use.")
+
+    if args and args[0] == "watch":
+        return _run_watch(args[1:], console)
+
+    try:
+        opts = parse_args(args)
+    except SystemExit as exit_:  # argparse already printed help/error text
+        return int(exit_.code or 0)
 
     try:
         _run(opts, console)
