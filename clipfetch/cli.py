@@ -6,7 +6,6 @@ import argparse
 import sys
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Optional
 
 from clipfetch import __version__, platforms
 from clipfetch.errors import ClipFetchError
@@ -23,20 +22,21 @@ class Options:
 
     platform: Platform
     count: int
-    target: Optional[str]
+    target: str | None
     out: Path
     workers: int
     quality: Quality
     headed: bool
     dry_run: bool
-    import_cookies: Optional[str]
+    import_cookies: str | None
+    metadata: bool
 
 
 def _positive_int(value: str) -> int:
     try:
         number = int(value)
     except ValueError:
-        raise argparse.ArgumentTypeError(f"{value!r} is not a number")
+        raise argparse.ArgumentTypeError(f"{value!r} is not a number") from None
     if number < 1:
         raise argparse.ArgumentTypeError("must be at least 1")
     return number
@@ -96,6 +96,11 @@ def build_parser() -> argparse.ArgumentParser:
         help="reuse an existing login from your real browser (macOS Chrome)",
     )
     parser.add_argument(
+        "--metadata",
+        action="store_true",
+        help="save caption, author, likes and post URL as a .json next to each clip",
+    )
+    parser.add_argument(
         "--headed",
         action="store_true",
         help="show the browser window while collecting",
@@ -109,7 +114,7 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def parse_args(argv: Optional[list[str]] = None) -> Options:
+def parse_args(argv: list[str] | None = None) -> Options:
     parser = build_parser()
     args = parser.parse_args(argv)
 
@@ -139,6 +144,7 @@ def parse_args(argv: Optional[list[str]] = None) -> Options:
         headed=args.headed,
         dry_run=args.dry_run,
         import_cookies=args.import_cookies,
+        metadata=args.metadata,
     )
 
 
@@ -156,7 +162,7 @@ def _run_watch(args: list[str], console: Console) -> int:
     return watch(parsed.dir, console, shuffle=parsed.shuffle)
 
 
-def main(argv: Optional[list[str]] = None) -> int:
+def main(argv: list[str] | None = None) -> int:
     args = sys.argv[1:] if argv is None else argv
 
     console = Console()
@@ -184,18 +190,18 @@ def main(argv: Optional[list[str]] = None) -> int:
 
 def _cookie_importer(opts: Options, platform: Platform, console: Console):
     """Build a session-prepare hook that injects imported browser cookies."""
-    if not opts.import_cookies:
+    browser = opts.import_cookies
+    if not browser:
         return None
 
     def prepare(context) -> None:
         from clipfetch.cookies import CookieImportError, import_session_cookies
 
         try:
-            cookies = import_session_cookies(platform, opts.import_cookies)
+            cookies = import_session_cookies(platform, browser)
             context.add_cookies(cookies)
             console.success(
-                f"Imported {len(cookies)} {platform.label} cookie(s) from "
-                f"{opts.import_cookies}."
+                f"Imported {len(cookies)} {platform.label} cookie(s) from {browser}."
             )
         except CookieImportError as err:
             console.error(f"Cookie import failed: {err}")
@@ -227,7 +233,9 @@ def _run(opts: Options, console: Console) -> None:
         )
 
     if opts.dry_run:
-        with session.platform_session(platform, console, headed=opts.headed, prepare=prepare) as context:
+        with session.platform_session(
+            platform, console, headed=opts.headed, prepare=prepare
+        ) as context:
             with Spinner(console, f"Collecting {noun}s… 0/{opts.count}") as spinner:
                 found = collector.collect(
                     context, platform, opts.quality, opts.count,
@@ -249,7 +257,9 @@ def _run(opts: Options, console: Console) -> None:
         console.info(f"Skipping {len(already_have)} {noun}(s) already in {opts.out}.")
 
     started = time.monotonic()
-    with session.platform_session(platform, console, headed=opts.headed, prepare=prepare) as context:
+    with session.platform_session(
+        platform, console, headed=opts.headed, prepare=prepare
+    ) as context:
         if platform.needs_browser_download:
             from clipfetch import browser_download
 
@@ -264,12 +274,15 @@ def _run(opts: Options, console: Console) -> None:
                     ),
                 )
             console.info(f"Downloading {len(found)} {noun}(s) through the browser…")
-            results = browser_download.download_all(context, found, opts.out, noun, console)
+            results = browser_download.download_all(
+                context, found, opts.out, noun, console, metadata=opts.metadata
+            )
         else:
             headers = {"Cookie": session.cookie_header(context, platform)}
             with MultiProgress(console, opts.count) as progress:
                 pool = DownloadPool(
-                    opts.out, noun, opts.workers, progress, extra_headers=headers
+                    opts.out, noun, opts.workers, progress,
+                    extra_headers=headers, metadata=opts.metadata,
                 )
                 found = collector.collect(
                     context, platform, opts.quality, opts.count,

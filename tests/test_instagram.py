@@ -1,4 +1,4 @@
-from clipfetch.model import Clip, Quality
+from clipfetch.model import Quality
 from clipfetch.platforms.instagram import Instagram
 
 instagram = Instagram()
@@ -9,6 +9,9 @@ FEED_PAYLOAD = {
         {
             "media": {
                 "code": "ABC123",
+                "caption": {"text": "space is cool #nasa"},
+                "user": {"username": "nasa"},
+                "like_count": 4321,
                 "video_versions": [
                     {"url": "https://cdn.test/abc_low.mp4", "width": 480},
                     {"url": "https://cdn.test/abc_mid.mp4", "width": 720},
@@ -37,10 +40,36 @@ def _clips(payload, quality=Quality.HIGH):
 
 
 def test_find_clips_picks_best_quality_and_skips_photos():
-    assert _clips(FEED_PAYLOAD) == [
-        Clip("instagram", "ABC123", "https://cdn.test/abc_hi.mp4"),
-        Clip("instagram", "DEF456", "https://cdn.test/def.mp4"),
+    clips = _clips(FEED_PAYLOAD)
+    assert [(c.ident, c.video_url) for c in clips] == [
+        ("ABC123", "https://cdn.test/abc_hi.mp4"),
+        ("DEF456", "https://cdn.test/def.mp4"),
     ]
+
+
+def test_find_clips_extracts_metadata_when_present():
+    rich, bare = _clips(FEED_PAYLOAD)
+    assert rich.url == "https://www.instagram.com/reel/ABC123/"
+    assert rich.author == "nasa"
+    assert rich.caption == "space is cool #nasa"
+    assert rich.likes == 4321
+    # DEF456 carries no caption/user/like_count — fields stay None, not junk.
+    assert bare.url == "https://www.instagram.com/reel/DEF456/"
+    assert bare.author is None and bare.caption is None and bare.likes is None
+
+
+def test_metadata_ignores_malformed_fields():
+    payload = {
+        "media": {
+            "code": "XYZ",
+            "caption": "bare string, not the usual dict",
+            "user": {"pk": 1},  # no username
+            "like_count": "many",  # not an int
+            "video_versions": [{"url": "https://cdn.test/x.mp4", "width": 720}],
+        }
+    }
+    (clip,) = _clips(payload)
+    assert clip.author is None and clip.caption is None and clip.likes is None
 
 
 def test_quality_selection():

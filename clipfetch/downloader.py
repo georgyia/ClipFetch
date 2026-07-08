@@ -8,13 +8,13 @@ more clips (producer/consumer pipeline).
 from __future__ import annotations
 
 import itertools
+import json
 import re
 import urllib.error
 import urllib.request
 from concurrent.futures import Future, ThreadPoolExecutor
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Optional
 
 from clipfetch.constants import USER_AGENT
 from clipfetch.model import Clip
@@ -30,9 +30,9 @@ class DownloadResult:
     """Outcome of one clip download."""
 
     clip: Clip
-    path: Optional[Path]
+    path: Path | None
     size: int
-    error: Optional[str] = None
+    error: str | None = None
     skipped: bool = False
 
     @property
@@ -61,6 +61,20 @@ def existing_idents(out_dir: Path, noun: str) -> set[str]:
     return found
 
 
+def write_sidecar(video_path: Path, clip: Clip) -> Path:
+    """Write ``clip``'s metadata next to its video as ``<name>.json``.
+
+    Backs the ``--metadata`` flag. Existing sidecars are rewritten: a re-run
+    may know more about a clip than the interrupted run that first saved it.
+    """
+    sidecar = video_path.with_suffix(".json")
+    sidecar.write_text(
+        json.dumps(clip.metadata(), ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+    )
+    return sidecar
+
+
 def clean_partials(out_dir: Path) -> int:
     """Remove leftover ``.part`` files from interrupted runs. Returns the count."""
     removed = 0
@@ -83,12 +97,14 @@ class DownloadPool:
         noun: str,
         workers: int,
         progress: MultiProgress,
-        extra_headers: Optional[dict] = None,
+        extra_headers: dict | None = None,
+        metadata: bool = False,
     ) -> None:
         self._out_dir = out_dir
         self._noun = noun
         self._progress = progress
         self._extra_headers = extra_headers or {}
+        self._metadata = metadata
         self._executor = ThreadPoolExecutor(workers, thread_name_prefix="download")
         self._futures: list[Future[DownloadResult]] = []
         self._indexes = itertools.count(1)
@@ -109,6 +125,8 @@ class DownloadPool:
             self._progress.add(index, filename, total=target.stat().st_size)
             self._progress.update(index, target.stat().st_size)
             self._progress.finish(index)
+            if self._metadata:  # an earlier run without --metadata may lack one
+                write_sidecar(target, clip)
             return DownloadResult(clip, path=target, size=target.stat().st_size, skipped=True)
 
         self._progress.add(index, filename)
@@ -120,6 +138,8 @@ class DownloadPool:
             partial.unlink(missing_ok=True)
             self._progress.finish(index, failed=True)
             return DownloadResult(clip, path=None, size=0, error=str(err))
+        if self._metadata:
+            write_sidecar(target, clip)
         self._progress.finish(index)
         return DownloadResult(clip, path=target, size=size)
 

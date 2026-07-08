@@ -1,4 +1,5 @@
 import io
+import json
 import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
@@ -9,6 +10,7 @@ from clipfetch.downloader import (
     clean_partials,
     existing_idents,
     filename_for,
+    write_sidecar,
 )
 from clipfetch.model import Clip
 from clipfetch.ui import Console, MultiProgress
@@ -100,6 +102,59 @@ def test_existing_file_is_skipped_not_refetched(tmp_path, video_server):
         (result,) = pool.wait()
     assert result.ok and result.skipped
     assert (tmp_path / "reel_001_DONE.mp4").read_bytes() == b"already here"
+
+
+def test_write_sidecar_contains_clip_metadata(tmp_path):
+    video = tmp_path / "reel_001_ABC.mp4"
+    clip = Clip(
+        "instagram", "ABC", "https://cdn.test/abc.mp4",
+        url="https://www.instagram.com/reel/ABC/",
+        author="nasa", caption="space", likes=42,
+    )
+    sidecar = write_sidecar(video, clip)
+    assert sidecar == tmp_path / "reel_001_ABC.json"
+    assert json.loads(sidecar.read_text(encoding="utf-8")) == {
+        "platform": "instagram",
+        "id": "ABC",
+        "url": "https://www.instagram.com/reel/ABC/",
+        "author": "nasa",
+        "caption": "space",
+        "likes": 42,
+    }
+
+
+def test_pool_writes_sidecars_only_when_enabled(tmp_path, video_server):
+    clip = _clip("CODE0", f"{video_server}/video/clip0")
+
+    progress = _progress()
+    with progress:
+        pool = DownloadPool(tmp_path, "reel", 2, progress, metadata=True)
+        pool.submit(clip)
+        (result,) = pool.wait()
+    assert result.ok
+    sidecar = tmp_path / "reel_001_CODE0.json"
+    assert json.loads(sidecar.read_text(encoding="utf-8"))["id"] == "CODE0"
+
+    other = tmp_path / "no_meta"
+    other.mkdir()
+    progress = _progress()
+    with progress:
+        pool = DownloadPool(other, "reel", 2, progress)  # metadata off (default)
+        pool.submit(clip)
+        (result,) = pool.wait()
+    assert result.ok
+    assert not list(other.glob("*.json"))
+
+
+def test_pool_backfills_sidecar_for_skipped_existing_file(tmp_path, video_server):
+    (tmp_path / "reel_001_DONE.mp4").write_bytes(b"already here")
+    progress = _progress()
+    with progress:
+        pool = DownloadPool(tmp_path, "reel", 2, progress, metadata=True)
+        pool.submit(_clip("DONE", f"{video_server}/video/unused"))
+        (result,) = pool.wait()
+    assert result.skipped
+    assert (tmp_path / "reel_001_DONE.json").exists()
 
 
 def test_failed_download_reports_error_and_cleans_up(tmp_path, video_server):

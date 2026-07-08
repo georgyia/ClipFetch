@@ -21,6 +21,8 @@ ready to watch on a flight, on the train, or anywhere without a connection.
 - **Watch offline** — `clipfetch watch` plays a downloaded folder one clip after another.
 - **Picks up where it left off** — re-running skips reels already in the folder.
 - **Quality control** — `--quality high|medium|low` chooses the rendition.
+- **Metadata sidecars** — `--metadata` writes the caption, author, like count and post URL
+  as a `.json` file next to each downloaded clip.
 - **Self-contained** — no third-party downloader libraries; the extraction and download
   logic is built from scratch on top of a single dependency (Playwright, the browser driver).
 - **Your session, your feed** — uses a dedicated local browser profile you sign in to once;
@@ -58,6 +60,7 @@ clipfetch -reels 10 @nasa            # 10 reels from a specific account
 clipfetch -reels 10 --out ~/clips    # choose the output folder
 clipfetch -reels 5 --quality low     # smaller files where a choice exists
 clipfetch -reels 5 --dry-run         # only list the video URLs, download nothing
+clipfetch -reels 25 --metadata       # also save caption/author/likes as a .json per clip
 clipfetch -reels 25 --import-cookies chrome   # reuse your real Chrome login (macOS)
 clipfetch watch reels                # play the downloaded folder in sequence
 clipfetch watch reels --shuffle      # …in random order

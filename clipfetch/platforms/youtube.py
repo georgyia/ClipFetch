@@ -17,7 +17,8 @@ a viable non-ciphered path appears. See GitHub issue #2.
 
 from __future__ import annotations
 
-from typing import Any, Iterator, Optional
+from collections.abc import Iterator
+from typing import Any
 
 from clipfetch.model import Clip, Quality
 from clipfetch.platforms.base import Platform
@@ -37,12 +38,12 @@ class YouTubeShorts(Platform):
     needs_browser_download = True  # googlevideo URLs are session/range bound
     experimental = True
 
-    def feed_url(self, target: Optional[str] = None) -> str:
+    def feed_url(self, target: str | None = None) -> str:
         if target:
             return f"{_HOME}@{target.lstrip('@')}/shorts"
         return _HOME + "shorts"
 
-    def is_on_feed(self, url: str, target: Optional[str] = None) -> bool:
+    def is_on_feed(self, url: str, target: str | None = None) -> bool:
         return "youtube.com/shorts" in url or "/shorts" in url
 
     def find_clips(self, payload: Any, quality: Quality) -> Iterator[Clip]:
@@ -56,7 +57,17 @@ class YouTubeShorts(Platform):
                 ident = details.get("videoId")
                 url = self._pick_url(streaming, quality)
                 if isinstance(ident, str) and ident and url:
-                    yield Clip(self.key, ident=ident, video_url=url, referer=_HOME)
+                    author = details.get("author")
+                    title = details.get("title")
+                    yield Clip(
+                        self.key,
+                        ident=ident,
+                        video_url=url,
+                        referer=_HOME,
+                        url=f"{_HOME}shorts/{ident}",
+                        author=author if isinstance(author, str) else None,
+                        caption=title if isinstance(title, str) else None,
+                    )
                     return
             for value in node.values():
                 yield from self._walk(value, quality)
@@ -65,7 +76,7 @@ class YouTubeShorts(Platform):
                 yield from self._walk(item, quality)
 
     @staticmethod
-    def _pick_url(streaming: dict, quality: Quality) -> Optional[str]:
+    def _pick_url(streaming: dict, quality: Quality) -> str | None:
         # Progressive formats carry audio+video together; only non-ciphered
         # entries expose a direct "url" (ciphered ones need player JS we avoid).
         playable = [

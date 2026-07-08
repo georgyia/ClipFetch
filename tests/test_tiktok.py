@@ -1,4 +1,4 @@
-from clipfetch.model import Clip, Quality
+from clipfetch.model import Quality
 from clipfetch.platforms.tiktok import TikTok
 
 tiktok = TikTok()
@@ -32,10 +32,36 @@ def _clips(payload, quality=Quality.HIGH):
 
 def test_find_clips_extracts_id_and_best_bitrate_with_referer():
     clips = _clips(FEED_PAYLOAD)
-    assert clips == [
-        Clip("tiktok", "7290000000000000001", "https://cdn.tt/hi.mp4", referer="https://www.tiktok.com/"),
-        Clip("tiktok", "7290000000000000002", "https://cdn.tt/only.mp4", referer="https://www.tiktok.com/"),
+    assert [(c.ident, c.video_url, c.referer) for c in clips] == [
+        ("7290000000000000001", "https://cdn.tt/hi.mp4", "https://www.tiktok.com/"),
+        ("7290000000000000002", "https://cdn.tt/only.mp4", "https://www.tiktok.com/"),
     ]
+
+
+def test_find_clips_extracts_metadata_when_present():
+    payload = {
+        "itemList": [
+            {
+                "id": "42",
+                "desc": "check this out",
+                "author": {"uniqueId": "cooluser", "nickname": "Cool User"},
+                "stats": {"diggCount": 987, "playCount": 100000},
+                "video": {"playAddr": "https://cdn.tt/42.mp4"},
+            }
+        ]
+    }
+    (clip,) = _clips(payload)
+    assert clip.caption == "check this out"
+    assert clip.author == "cooluser"
+    assert clip.likes == 987
+    assert clip.url == "https://www.tiktok.com/@cooluser/video/42"
+
+
+def test_metadata_absent_stays_none():
+    (first, second) = _clips(FEED_PAYLOAD)
+    assert first.caption == "a clip"  # desc is present in the fixture
+    assert first.author is None and first.likes is None and first.url is None
+    assert second.caption is None and second.author is None
 
 
 def test_quality_selection_over_bitrates():

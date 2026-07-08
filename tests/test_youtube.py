@@ -1,4 +1,4 @@
-from clipfetch.model import Clip, Quality
+from clipfetch.model import Quality
 from clipfetch.platforms.youtube import YouTubeShorts
 
 yt = YouTubeShorts()
@@ -26,10 +26,13 @@ def _clips(payload, quality=Quality.HIGH):
 
 
 def test_extracts_progressive_url_and_skips_ciphered():
-    clips = _clips(PLAYER_RESPONSE)
-    assert clips == [
-        Clip("youtube", "abc123", "https://rr.googlevideo.com/720.mp4", referer="https://www.youtube.com/"),
-    ]
+    (clip,) = _clips(PLAYER_RESPONSE)
+    assert clip.ident == "abc123"
+    assert clip.video_url == "https://rr.googlevideo.com/720.mp4"
+    assert clip.referer == "https://www.youtube.com/"
+    assert clip.url == "https://www.youtube.com/shorts/abc123"
+    assert clip.caption == "a short"  # videoDetails.title
+    assert clip.author is None  # fixture has no author field
 
 
 def test_quality_selection():

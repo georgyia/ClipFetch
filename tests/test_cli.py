@@ -35,6 +35,12 @@ def test_custom_out_quality_and_flags():
     assert opts.quality is Quality.LOW
     assert opts.headed
     assert opts.dry_run
+    assert not opts.metadata  # off unless asked for
+
+
+def test_metadata_flag():
+    assert parse_args(["-reels", "5", "--metadata"]).metadata
+    assert not parse_args(["-reels", "5"]).metadata
 
 
 @pytest.mark.parametrize("argv", [

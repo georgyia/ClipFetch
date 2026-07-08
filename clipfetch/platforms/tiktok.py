@@ -9,7 +9,8 @@ session — TikTok is best-effort.
 
 from __future__ import annotations
 
-from typing import Any, Iterator, Optional
+from collections.abc import Iterator
+from typing import Any
 
 from clipfetch.model import Clip, Quality
 from clipfetch.platforms.base import Platform
@@ -29,12 +30,12 @@ class TikTok(Platform):
     needs_browser_download = True  # signed URLs are bound to the browser session
     experimental = True  # extraction is solid; TikTok anti-bot often blocks downloads
 
-    def feed_url(self, target: Optional[str] = None) -> str:
+    def feed_url(self, target: str | None = None) -> str:
         if target:
             return f"{_HOME}@{target.lstrip('@')}"
         return _HOME + "foryou"
 
-    def is_on_feed(self, url: str, target: Optional[str] = None) -> bool:
+    def is_on_feed(self, url: str, target: str | None = None) -> bool:
         return self.host in url and "/login" not in url
 
     def find_clips(self, payload: Any, quality: Quality) -> Iterator[Clip]:
@@ -47,7 +48,17 @@ class TikTok(Platform):
             if isinstance(ident, str) and ident and isinstance(video, dict):
                 url = self._pick_url(video, quality)
                 if url:
-                    yield Clip(self.key, ident=ident, video_url=url, referer=_HOME)
+                    author = self._author(node)
+                    yield Clip(
+                        self.key,
+                        ident=ident,
+                        video_url=url,
+                        referer=_HOME,
+                        url=f"{_HOME}@{author}/video/{ident}" if author else None,
+                        author=author,
+                        caption=node.get("desc") if isinstance(node.get("desc"), str) else None,
+                        likes=self._likes(node),
+                    )
                     return
             for value in node.values():
                 yield from self._walk(value, quality)
@@ -56,7 +67,25 @@ class TikTok(Platform):
                 yield from self._walk(item, quality)
 
     @staticmethod
-    def _pick_url(video: dict, quality: Quality) -> Optional[str]:
+    def _author(node: dict) -> str | None:
+        author = node.get("author")
+        if isinstance(author, dict) and isinstance(author.get("uniqueId"), str):
+            return author["uniqueId"]
+        if isinstance(author, str) and author:  # some payloads inline the handle
+            return author
+        return None
+
+    @staticmethod
+    def _likes(node: dict) -> int | None:
+        stats = node.get("stats")
+        if isinstance(stats, dict):
+            likes = stats.get("diggCount")
+            if isinstance(likes, int) and not isinstance(likes, bool):
+                return likes
+        return None
+
+    @staticmethod
+    def _pick_url(video: dict, quality: Quality) -> str | None:
         # Preferred: bitrateInfo carries several renditions with a bitrate.
         renditions = []
         for entry in video.get("bitrateInfo") or []:

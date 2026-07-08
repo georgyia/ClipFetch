@@ -11,7 +11,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from clipfetch.downloader import DownloadResult, filename_for
+from clipfetch.downloader import DownloadResult, filename_for, write_sidecar
 from clipfetch.model import Clip
 from clipfetch.ui import Console, human_size
 
@@ -53,7 +53,8 @@ def _sleep(context, ms: int) -> None:
 
 
 def download_all(
-    context, clips: list[Clip], out_dir: Path, noun: str, console: Console
+    context, clips: list[Clip], out_dir: Path, noun: str, console: Console,
+    metadata: bool = False,
 ) -> list[DownloadResult]:
     """Download each clip in turn via the browser session. Returns results."""
     results: list[DownloadResult] = []
@@ -63,11 +64,15 @@ def download_all(
         if target.exists() and target.stat().st_size > 0:
             size = target.stat().st_size
             console.dim(f"  [{index}/{len(clips)}] {filename} — already have")
+            if metadata:  # an earlier run without --metadata may lack one
+                write_sidecar(target, clip)
             results.append(DownloadResult(clip, target, size, skipped=True))
             continue
         try:
             body = _fetch(context, clip)
             target.write_bytes(body)
+            if metadata:
+                write_sidecar(target, clip)
             console.dim(f"  [{index}/{len(clips)}] {filename} — {human_size(len(body))}")
             results.append(DownloadResult(clip, target, len(body)))
         except Exception as err:
