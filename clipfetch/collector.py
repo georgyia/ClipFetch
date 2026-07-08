@@ -10,7 +10,7 @@ continues.
 from __future__ import annotations
 
 import time
-from typing import Callable, Optional, Set
+from typing import Callable
 
 from playwright.sync_api import BrowserContext, Page, Response
 
@@ -38,15 +38,15 @@ class ClipCollector:
         quality: Quality,
         limit: int,
         on_clip: Callable[[Clip], None],
-        active: Optional[Callable[[], bool]] = None,
-        already_have: Optional[Set[str]] = None,
+        active: Callable[[], bool] | None = None,
+        already_have: set[str] | None = None,
     ) -> None:
         self._platform = platform
         self._quality = quality
         self._limit = limit
         self._on_clip = on_clip
         self._active = active or (lambda: True)
-        self._seen: Set[str] = set(already_have or ())
+        self._seen: set[str] = set(already_have or ())
         self.clips: list[Clip] = []
 
     @property
@@ -99,9 +99,9 @@ def collect(
     quality: Quality,
     count: int,
     on_clip: Callable[[Clip], None],
-    on_progress: Optional[Callable[[int], None]] = None,
-    target: Optional[str] = None,
-    already_have: Optional[Set[str]] = None,
+    on_progress: Callable[[int], None] | None = None,
+    target: str | None = None,
+    already_have: set[str] | None = None,
     stall_timeout_s: float = _DEFAULT_STALL_TIMEOUT_S,
 ) -> list[Clip]:
     """Scroll ``platform``'s feed until ``count`` unique clips are collected.

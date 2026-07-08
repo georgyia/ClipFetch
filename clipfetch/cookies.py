@@ -19,7 +19,6 @@ import subprocess
 import sys
 import tempfile
 from pathlib import Path
-from typing import Optional
 
 from clipfetch.errors import ClipFetchError
 from clipfetch.platforms.base import Platform
@@ -54,7 +53,7 @@ def _keychain_password() -> bytes:
             timeout=30,
         )
     except FileNotFoundError:
-        raise CookieImportError("The macOS 'security' tool was not found.")
+        raise CookieImportError("The macOS 'security' tool was not found.") from None
     if result.returncode != 0:
         raise CookieImportError(
             "Could not read Chrome's key from the Keychain (access denied or Chrome "
@@ -108,7 +107,7 @@ def decrypt_value(encrypted: bytes, key: bytes) -> str:
             timeout=30,
         )
     except FileNotFoundError:
-        raise CookieImportError("The 'openssl' tool was not found.")
+        raise CookieImportError("The 'openssl' tool was not found.") from None
     if result.returncode != 0:
         raise CookieImportError("Failed to decrypt a cookie value.")
     return _clean_plaintext(result.stdout)

@@ -9,9 +9,9 @@ where you sign in once, and the session cookie persists there for every later
 from __future__ import annotations
 
 import time
+from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from pathlib import Path
-from typing import Iterator, Optional
 
 from playwright.sync_api import BrowserContext, Playwright, sync_playwright
 
@@ -91,7 +91,7 @@ def platform_session(
     console: Console,
     headed: bool = False,
     login_timeout_s: float = LOGIN_TIMEOUT_S,
-    prepare: Optional[callable] = None,
+    prepare: Callable[[BrowserContext], None] | None = None,
 ) -> Iterator[BrowserContext]:
     """Yield a browser context signed in to ``platform``.
 

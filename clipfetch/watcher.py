@@ -12,7 +12,7 @@ import random
 import subprocess
 import sys
 from pathlib import Path
-from typing import Callable, Optional
+from typing import Callable
 
 from clipfetch.ui import Console
 
@@ -44,7 +44,7 @@ def watch(
     directory: Path,
     console: Console,
     shuffle: bool = False,
-    runner: Optional[Callable[[Path], None]] = None,
+    runner: Callable[[Path], None] | None = None,
 ) -> int:
     """Play every video in ``directory`` in turn. Returns a process exit code."""
     if not directory.is_dir():

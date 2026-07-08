@@ -12,7 +12,7 @@ import os
 import sys
 import threading
 import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 RESET = "\x1b[0m"
 BOLD = "\x1b[1m"
@@ -114,7 +114,7 @@ class Spinner:
         self._stop = threading.Event()
         self._thread: threading.Thread | None = None
 
-    def __enter__(self) -> "Spinner":
+    def __enter__(self) -> Spinner:
         if self._console.ansi:
             self._console.stream.write(_HIDE_CURSOR)
             self._thread = threading.Thread(target=self._spin, daemon=True)
@@ -173,7 +173,7 @@ class MultiProgress:
         self._thread: threading.Thread | None = None
         self._rendered_lines = 0
 
-    def __enter__(self) -> "MultiProgress":
+    def __enter__(self) -> MultiProgress:
         if self._console.ansi:
             self._console.stream.write(_HIDE_CURSOR)
             self._thread = threading.Thread(target=self._render_loop, daemon=True)

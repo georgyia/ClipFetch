@@ -9,7 +9,8 @@ session, scrolling, the parallel downloader, the terminal UI — is shared.
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import Any, Iterator, Optional
+from collections.abc import Iterator
+from typing import Any
 
 from clipfetch.model import Clip, Quality
 
@@ -27,7 +28,7 @@ class Platform(ABC):
     # signed-in session; ``None`` means the platform is used without an
     # enforced login (best-effort).
     login_url: str
-    session_cookie: Optional[str] = None
+    session_cookie: str | None = None
     supports_target: bool = False  # accepts "@username"
     # When True, clips are fetched through the live browser session (their URLs
     # are fingerprint-bound) instead of the parallel urllib downloader.
@@ -36,10 +37,10 @@ class Platform(ABC):
     experimental: bool = False
 
     @abstractmethod
-    def feed_url(self, target: Optional[str] = None) -> str:
+    def feed_url(self, target: str | None = None) -> str:
         """URL of the feed to scroll (optionally for a specific account)."""
 
-    def is_on_feed(self, url: str, target: Optional[str] = None) -> bool:
+    def is_on_feed(self, url: str, target: str | None = None) -> bool:
         """Whether ``url`` is (still) the feed we opened — gates collection."""
         return url.startswith(self.feed_url(target).split("?", 1)[0])
 
