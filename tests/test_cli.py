@@ -62,3 +62,31 @@ def test_main_returns_nonzero_on_bad_args(capsys):
 
 def test_main_version(capsys):
     assert main(["--version"]) == 0
+
+
+def test_main_version_does_not_print_banner(capsys):
+    assert main(["--version"]) == 0
+    captured = capsys.readouterr()
+    assert "ClipFetch" not in captured.out
+
+
+def test_main_help_does_not_print_banner(capsys):
+    assert main(["--help"]) == 0
+    captured = capsys.readouterr()
+    assert "ClipFetch" not in captured.out
+    assert "usage:" in captured.out
+
+
+def test_main_prints_banner_for_valid_run(capsys, monkeypatch):
+    # Avoid actually launching a browser/download by mocking _run.
+    from clipfetch import cli
+
+    calls = []
+
+    def fake_run(opts, console):
+        calls.append(opts)
+
+    monkeypatch.setattr(cli, "_run", fake_run)
+    assert main(["-reels", "1"]) == 0
+    assert "ClipFetch" in capsys.readouterr().out
+    assert len(calls) == 1

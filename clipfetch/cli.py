@@ -164,18 +164,20 @@ def _run_watch(args: list[str], console: Console) -> int:
 
 def main(argv: list[str] | None = None) -> int:
     args = sys.argv[1:] if argv is None else argv
-
     console = Console()
-    console.banner(__version__)
-    console.dim("Personal use only — respect creators and platform Terms of Use.")
 
     if args and args[0] == "watch":
+        console.banner(__version__)
+        console.dim("Personal use only — respect creators and platform Terms of Use.")
         return _run_watch(args[1:], console)
 
     try:
         opts = parse_args(args)
     except SystemExit as exit_:  # argparse already printed help/error text
         return int(exit_.code or 0)
+
+    console.banner(__version__)
+    console.dim("Personal use only — respect creators and platform Terms of Use.")
 
     try:
         _run(opts, console)
