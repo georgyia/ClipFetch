@@ -7,7 +7,6 @@ import pytest
 
 from clipfetch.downloader import (
     DownloadPool,
-    clean_partials,
     existing_idents,
     filename_for,
     write_sidecar,
@@ -20,10 +19,26 @@ class _VideoHandler(BaseHTTPRequestHandler):
     """Serves /video/<name> as deterministic bytes; everything else 404s."""
 
     def do_GET(self):
-        if not self.path.startswith("/video/"):
+        if not self.path.startswith(("/video/", "/ignore-range/")):
             self.send_error(404)
             return
         body = self.path.rsplit("/", 1)[-1].encode() * 5000
+        range_header = self.headers.get("Range")
+        if range_header and self.path.startswith("/video/"):
+            start = int(range_header.removeprefix("bytes=").removesuffix("-"))
+            if start >= len(body):
+                self.send_response(416)
+                self.send_header("Content-Range", f"bytes */{len(body)}")
+                self.end_headers()
+                return
+            partial = body[start:]
+            self.send_response(206)
+            self.send_header("Content-Type", "video/mp4")
+            self.send_header("Content-Length", str(len(partial)))
+            self.send_header("Content-Range", f"bytes {start}-{len(body) - 1}/{len(body)}")
+            self.end_headers()
+            self.wfile.write(partial)
+            return
         self.send_response(200)
         self.send_header("Content-Type", "video/mp4")
         self.send_header("Content-Length", str(len(body)))
@@ -65,14 +80,6 @@ def test_existing_idents_scans_completed_downloads(tmp_path):
     (tmp_path / "reel_003_EMPTY.mp4").write_bytes(b"")  # zero-byte: not complete
     (tmp_path / "tiktok_001_OTHER.mp4").write_bytes(b"z")  # different noun
     assert existing_idents(tmp_path, "reel") == {"ABC", "DEF"}
-
-
-def test_clean_partials_removes_only_part_files(tmp_path):
-    (tmp_path / "reel_001_ABC.mp4").write_bytes(b"keep")
-    (tmp_path / "reel_002_DEF.part").write_bytes(b"junk")
-    assert clean_partials(tmp_path) == 1
-    assert (tmp_path / "reel_001_ABC.mp4").exists()
-    assert not list(tmp_path.glob("*.part"))
 
 
 def test_parallel_downloads_write_complete_files(tmp_path, video_server):
@@ -170,3 +177,45 @@ def test_failed_download_reports_error_and_cleans_up(tmp_path, video_server):
     assert not bad.ok and "404" in bad.error
     assert bad.path is None
     assert not list(tmp_path.glob("*.part"))
+
+
+def test_partial_download_resumes_with_range_even_if_index_changed(tmp_path, video_server):
+    body = b"resumable" * 5000
+    partial = tmp_path / "reel_009_CODE.part"
+    partial.write_bytes(body[:12345])
+    progress = _progress()
+    with progress:
+        pool = _pool(tmp_path, progress)
+        pool.submit(_clip("CODE", f"{video_server}/video/resumable"))
+        (result,) = pool.wait()
+
+    assert result.ok
+    assert result.path == tmp_path / "reel_009_CODE.mp4"
+    assert result.path.read_bytes() == body
+    assert result.size == len(body)
+
+
+def test_range_ignored_restarts_instead_of_appending(tmp_path, video_server):
+    partial = tmp_path / "reel_001_CODE.part"
+    partial.write_bytes(b"stale-prefix")
+    progress = _progress()
+    with progress:
+        pool = _pool(tmp_path, progress)
+        pool.submit(_clip("CODE", f"{video_server}/ignore-range/fresh"))
+        (result,) = pool.wait()
+
+    assert result.ok
+    assert result.path.read_bytes() == b"fresh" * 5000
+
+
+def test_failed_resume_preserves_partial_for_fresh_url_next_run(tmp_path, video_server):
+    partial = tmp_path / "reel_001_CODE.part"
+    partial.write_bytes(b"keep me")
+    progress = _progress()
+    with progress:
+        pool = _pool(tmp_path, progress)
+        pool.submit(_clip("CODE", f"{video_server}/missing"))
+        (result,) = pool.wait()
+
+    assert not result.ok
+    assert partial.read_bytes() == b"keep me"

@@ -31,6 +31,7 @@ clipfetch = "clipfetch.cli:main"
 
 [project.optional-dependencies]
 dev = ["pytest>=7", "ruff>=0.4", "mypy>=1.10"]
+cookies = ["cryptography>=41"]
 
 [tool.setuptools.dynamic]
 version = { attr = "clipfetch.__version__" }
@@ -40,6 +41,10 @@ include = ["clipfetch*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+addopts = "-m 'not integration'"
+markers = [
+    "integration: opt-in tests that launch a real browser",
+]
 
 [tool.ruff]
 target-version = "py39"

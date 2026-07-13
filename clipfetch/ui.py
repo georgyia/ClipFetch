@@ -12,6 +12,7 @@ import os
 import sys
 import threading
 import time
+from collections.abc import Callable
 from dataclasses import dataclass
 
 RESET = "\x1b[0m"
@@ -53,6 +54,18 @@ def human_size(num_bytes: float) -> str:
             return f"{num_bytes:.1f} {unit}" if unit != "B" else f"{int(num_bytes)} B"
         num_bytes /= 1024
     raise AssertionError("unreachable")
+
+
+def human_duration(seconds: float) -> str:
+    """Format a rough ETA without implying sub-second precision."""
+    seconds = max(0, round(seconds))
+    if seconds < 60:
+        return f"{seconds}s"
+    minutes, seconds = divmod(seconds, 60)
+    if minutes < 60:
+        return f"{minutes}m {seconds:02d}s"
+    hours, minutes = divmod(minutes, 60)
+    return f"{hours}h {minutes:02d}m"
 
 
 class Console:
@@ -151,6 +164,7 @@ class _Task:
     label: str
     total: int = 0  # bytes; 0 = unknown
     done: int = 0
+    transferred: int = 0
     finished: bool = False
     failed: bool = False
 
@@ -163,9 +177,18 @@ class MultiProgress:
     Falls back to one plain line per finished download without a TTY.
     """
 
-    def __init__(self, console: Console, overall_total: int) -> None:
+    def __init__(
+        self,
+        console: Console,
+        overall_total: int,
+        noun: str = "clip",
+        clock: Callable[[], float] = time.monotonic,
+    ) -> None:
         self._console = console
         self._overall_total = overall_total
+        self._noun = noun
+        self._clock = clock
+        self._started_at: float | None = None
         self._tasks: dict[int, _Task] = {}
         self._status = ""
         self._lock = threading.Lock()
@@ -174,6 +197,7 @@ class MultiProgress:
         self._rendered_lines = 0
 
     def __enter__(self) -> MultiProgress:
+        self._started_at = self._clock()
         if self._console.ansi:
             self._console.stream.write(_HIDE_CURSOR)
             self._thread = threading.Thread(target=self._render_loop, daemon=True)
@@ -196,13 +220,14 @@ class MultiProgress:
         if changed and not self._console.ansi:
             self._console.info(text)
 
-    def add(self, task_id: int, label: str, total: int = 0) -> None:
+    def add(self, task_id: int, label: str, total: int = 0, done: int = 0) -> None:
         with self._lock:
-            self._tasks[task_id] = _Task(label, total)
+            self._tasks[task_id] = _Task(label, total, done)
 
     def update(self, task_id: int, done: int, total: int | None = None) -> None:
         with self._lock:
             task = self._tasks[task_id]
+            task.transferred += max(0, done - task.done)
             task.done = done
             if total is not None:
                 task.total = total
@@ -230,7 +255,16 @@ class MultiProgress:
         tasks = self._snapshot()
         finished = sum(1 for _, t in tasks if t.finished and not t.failed)
         failed = sum(1 for _, t in tasks if t.failed)
-        overall = f"{BOLD}⇣ {finished}/{self._overall_total} reels downloaded{RESET}"
+        transferred = sum(task.transferred for _, task in tasks)
+        noun = self._noun if self._overall_total == 1 else f"{self._noun}s"
+        overall = (
+            f"{BOLD}⇣ {finished}/{self._overall_total} {noun} downloaded"
+            f" • {human_size(transferred)} transferred"
+        )
+        eta = self._eta(tasks, transferred)
+        if eta is not None:
+            overall += f" • ETA {human_duration(eta)}"
+        overall += RESET
         if failed:
             overall += f" {RED}({failed} failed){RESET}"
         lines.append(overall)
@@ -262,3 +296,19 @@ class MultiProgress:
         stream.write(buffer)
         stream.flush()
         self._rendered_lines = len(lines)
+
+    def _eta(self, tasks: list[tuple[int, _Task]], transferred: int) -> float | None:
+        """Estimate time for known remaining bytes at this run's average rate."""
+        if self._started_at is None or transferred <= 0:
+            return None
+        elapsed = self._clock() - self._started_at
+        if elapsed <= 0:
+            return None
+        remaining = sum(
+            max(task.total - task.done, 0)
+            for _, task in tasks
+            if task.total and not task.finished
+        )
+        if remaining <= 0:
+            return None
+        return remaining / (transferred / elapsed)

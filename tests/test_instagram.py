@@ -1,4 +1,4 @@
-from clipfetch.model import Quality
+from clipfetch.model import Clip, Quality
 from clipfetch.platforms.instagram import Instagram
 
 instagram = Instagram()
@@ -116,3 +116,46 @@ def test_harvest_shortcodes_dedupes_and_skips_known():
     page.mouse = type("M", (), {"wheel": staticmethod(lambda *a, **k: None)})()
     codes = instagram._harvest_shortcodes(page, count=10, already_have={"BBB"})
     assert codes == ["AAA", "CCC"]  # BBB already have; photo link ignored
+
+
+class _FakePermalinkPage:
+    def __init__(self, context):
+        self.context = context
+        self.closed = False
+
+    def goto(self, url, wait_until, timeout):
+        assert wait_until == "commit"
+        self.context.started.append(url.split("/reel/", 1)[1].split("/", 1)[0])
+
+    def wait_for_timeout(self, _milliseconds):
+        # Resolution only becomes possible after every navigation was started.
+        self.context.wait_started_counts.append(len(self.context.started))
+        for code in self.context.started:
+            self.context.clips.setdefault(code, Clip("instagram", code, f"https://cdn/{code}"))
+
+    def close(self):
+        self.closed = True
+
+
+class _FakePermalinkContext:
+    def __init__(self, clips):
+        self.clips = clips
+        self.started = []
+        self.wait_started_counts = []
+        self.pages = []
+
+    def new_page(self):
+        page = _FakePermalinkPage(self)
+        self.pages.append(page)
+        return page
+
+
+def test_permalink_batch_starts_all_tabs_before_waiting():
+    clips = {}
+    context = _FakePermalinkContext(clips)
+    instagram._resolve_permalinks(context, ["AAA", "BBB", "CCC"], clips)
+
+    assert context.started == ["AAA", "BBB", "CCC"]
+    assert context.wait_started_counts == [3]
+    assert list(clips) == ["AAA", "BBB", "CCC"]
+    assert all(page.closed for page in context.pages)

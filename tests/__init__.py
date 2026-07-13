@@ -1,0 +1,1 @@
+"""ClipFetch test package."""

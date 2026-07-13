@@ -17,16 +17,16 @@ ready to watch on a flight, on the train, or anywhere without a connection.
 - **One command** — `clipfetch -reels N` downloads N reels from your personal Reels feed.
 - **Accounts too** — `clipfetch -reels N @username` grabs a specific account's reels.
 - **Fast** — reels are downloaded in parallel while the feed is still being scrolled.
-- **Interactive** — live spinners and per-download progress bars in the terminal.
+- **Interactive** — live per-download bars, transferred-size totals, and a rough ETA.
 - **Watch offline** — `clipfetch watch` plays a downloaded folder one clip after another.
-- **Picks up where it left off** — re-running skips reels already in the folder.
+- **Picks up where it left off** — re-running skips completed reels and resumes partial files.
 - **Quality control** — `--quality high|medium|low` chooses the rendition.
 - **Metadata sidecars** — `--metadata` writes the caption, author, like count and post URL
   as a `.json` file next to each downloaded clip.
 - **Self-contained** — no third-party downloader libraries; the extraction and download
   logic is built from scratch on top of a single dependency (Playwright, the browser driver).
 - **Your session, your feed** — uses a dedicated local browser profile you sign in to once;
-  no passwords stored. Optionally reuse your real Chrome login with `--import-cookies chrome`.
+  no passwords stored. Optionally reuse a local Chrome, Firefox, or Safari login.
 - **More platforms** — TikTok is available (`-tiktoks N`, experimental — see below).
 
 ## Installation
@@ -61,13 +61,25 @@ clipfetch -reels 10 --out ~/clips    # choose the output folder
 clipfetch -reels 5 --quality low     # smaller files where a choice exists
 clipfetch -reels 5 --dry-run         # only list the video URLs, download nothing
 clipfetch -reels 25 --metadata       # also save caption/author/likes as a .json per clip
-clipfetch -reels 25 --import-cookies chrome   # reuse your real Chrome login (macOS)
+clipfetch -reels 25 --import-cookies firefox  # Firefox on macOS/Linux/Windows
+clipfetch -reels 25 --import-cookies chrome   # Chrome on macOS/Linux/Windows
+clipfetch -reels 25 --import-cookies safari   # Safari on macOS
 clipfetch watch reels                # play the downloaded folder in sequence
 clipfetch watch reels --shuffle      # …in random order
 clipfetch --help                     # all options
 ```
 
 Re-running the same command tops up the folder — reels already downloaded are skipped.
+
+Firefox import needs no extra package. Modern Windows Chrome encryption additionally
+requires `pip install "clipfetch[cookies]"`; Safari may require granting the terminal
+Full Disk Access in macOS System Settings.
+
+### Browser integration test
+
+Normal tests use fakes and do not download or launch a browser. Maintainers can run the
+opt-in local-fixture smoke test with `pytest -m integration tests/integration` after
+`playwright install chromium`, or trigger the **Browser integration** workflow manually.
 
 ### Other platforms
 

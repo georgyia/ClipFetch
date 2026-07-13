@@ -92,8 +92,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--import-cookies",
         metavar="BROWSER",
-        choices=["chrome"],
-        help="reuse an existing login from your real browser (macOS Chrome)",
+        choices=["chrome", "firefox", "safari"],
+        help="reuse an existing login from Chrome, Firefox, or Safari",
     )
     parser.add_argument(
         "--metadata",
@@ -218,7 +218,7 @@ def _run(opts: Options, console: Console) -> None:
 
     # Imported lazily so --help and unit tests never need the browser stack.
     from clipfetch import collector, session
-    from clipfetch.downloader import DownloadPool, clean_partials, existing_idents
+    from clipfetch.downloader import DownloadPool, existing_idents
     from clipfetch.errors import DownloadError
     from clipfetch.ui import MultiProgress, Spinner, human_size
 
@@ -253,7 +253,6 @@ def _run(opts: Options, console: Console) -> None:
         return
 
     opts.out.mkdir(parents=True, exist_ok=True)
-    clean_partials(opts.out)
     already_have = existing_idents(opts.out, noun)
     if already_have:
         console.info(f"Skipping {len(already_have)} {noun}(s) already in {opts.out}.")
@@ -281,7 +280,7 @@ def _run(opts: Options, console: Console) -> None:
             )
         else:
             headers = {"Cookie": session.cookie_header(context, platform)}
-            with MultiProgress(console, opts.count) as progress:
+            with MultiProgress(console, opts.count, noun=noun) as progress:
                 pool = DownloadPool(
                     opts.out, noun, opts.workers, progress,
                     extra_headers=headers, metadata=opts.metadata,

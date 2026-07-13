@@ -43,6 +43,11 @@ def test_metadata_flag():
     assert not parse_args(["-reels", "5"]).metadata
 
 
+@pytest.mark.parametrize("browser", ["chrome", "firefox", "safari"])
+def test_cookie_import_browser_choices(browser):
+    assert parse_args(["-reels", "5", "--import-cookies", browser]).import_cookies == browser
+
+
 @pytest.mark.parametrize("argv", [
     [],                       # no source given
     ["-reels", "0"],          # below minimum

@@ -7,6 +7,7 @@ more clips (producer/consumer pipeline).
 
 from __future__ import annotations
 
+import http.client
 import itertools
 import json
 import re
@@ -23,6 +24,7 @@ from clipfetch.ui import MultiProgress
 _CHUNK_SIZE = 256 * 1024
 _REQUEST_TIMEOUT_S = 60
 _SAFE_IDENT = re.compile(r"[^A-Za-z0-9_-]")
+_CONTENT_RANGE = re.compile(r"bytes (\d+)-(\d+)/(\d+|\*)")
 
 
 @dataclass(frozen=True)
@@ -75,15 +77,6 @@ def write_sidecar(video_path: Path, clip: Clip) -> Path:
     return sidecar
 
 
-def clean_partials(out_dir: Path) -> int:
-    """Remove leftover ``.part`` files from interrupted runs. Returns the count."""
-    removed = 0
-    for path in out_dir.glob("*.part"):
-        path.unlink(missing_ok=True)
-        removed += 1
-    return removed
-
-
 class DownloadPool:
     """Downloads clips on worker threads as they are discovered.
 
@@ -122,20 +115,26 @@ class DownloadPool:
         filename = filename_for(self._noun, index, clip)
         target = self._out_dir / filename
         if target.exists() and target.stat().st_size > 0:
-            self._progress.add(index, filename, total=target.stat().st_size)
-            self._progress.update(index, target.stat().st_size)
+            size = target.stat().st_size
+            self._progress.add(index, filename, total=size, done=size)
             self._progress.finish(index)
             if self._metadata:  # an earlier run without --metadata may lack one
                 write_sidecar(target, clip)
             return DownloadResult(clip, path=target, size=target.stat().st_size, skipped=True)
 
-        self._progress.add(index, filename)
-        partial = target.with_suffix(".part")
+        partial = self._find_partial(clip) or target.with_suffix(".part")
+        # A previous run may have assigned a different numeric prefix before
+        # interruption. Keep that stable so its partial can be resumed.
+        if partial != target.with_suffix(".part"):
+            target = partial.with_suffix(".mp4")
+        offset = partial.stat().st_size if partial.exists() else 0
+        self._progress.add(index, filename, done=offset)
         try:
             size = self._fetch(index, clip, partial)
             partial.replace(target)
-        except (urllib.error.URLError, OSError, ValueError) as err:
-            partial.unlink(missing_ok=True)
+        except (urllib.error.URLError, http.client.HTTPException, OSError, ValueError) as err:
+            # Preserve verified bytes for a later run. CDN URLs can expire, but
+            # the next collection supplies a fresh URL for the same clip id.
             self._progress.finish(index, failed=True)
             return DownloadResult(clip, path=None, size=0, error=str(err))
         if self._metadata:
@@ -143,17 +142,68 @@ class DownloadPool:
         self._progress.finish(index)
         return DownloadResult(clip, path=target, size=size)
 
+    def _find_partial(self, clip: Clip) -> Path | None:
+        pattern = f"{self._noun}_*_{safe_ident(clip.ident)}.part"
+        candidates = [path for path in self._out_dir.glob(pattern) if path.is_file()]
+        if not candidates:
+            return None
+        # Prefer the copy containing the most reusable data if an old bug or a
+        # manual copy left more than one candidate behind.
+        return max(candidates, key=lambda path: path.stat().st_size)
+
     def _fetch(self, index: int, clip: Clip, destination: Path) -> int:
         headers = {"User-Agent": USER_AGENT, **self._extra_headers}
         if clip.referer:
             headers["Referer"] = clip.referer
+        offset = destination.stat().st_size if destination.exists() else 0
+        if offset:
+            headers["Range"] = f"bytes={offset}-"
         request = urllib.request.Request(clip.video_url, headers=headers)
-        received = 0
-        with urllib.request.urlopen(request, timeout=_REQUEST_TIMEOUT_S) as response:
-            total = int(response.headers.get("Content-Length") or 0)
-            with destination.open("wb") as file:
+        try:
+            response = urllib.request.urlopen(request, timeout=_REQUEST_TIMEOUT_S)
+        except urllib.error.HTTPError as error:
+            if error.code == 416 and offset:
+                remote_size = _unsatisfied_range_size(error.headers.get("Content-Range"))
+                if remote_size == offset:
+                    self._progress.update(index, offset, offset)
+                    return offset
+            raise
+        with response:
+            status = getattr(response, "status", response.getcode())
+            content_length = int(response.headers.get("Content-Length") or 0)
+            mode = "wb"
+            received = 0
+            total = content_length
+            if offset and status == 206:
+                start, complete_size = _parse_content_range(
+                    response.headers.get("Content-Range")
+                )
+                if start != offset:
+                    raise ValueError(
+                        f"server resumed at byte {start}, expected {offset}"
+                    )
+                mode = "ab"
+                received = offset
+                total = complete_size or offset + content_length
+                self._progress.update(index, received, total or None)
+            # A 200 response ignored Range. Starting over is safe; appending is not.
+            with destination.open(mode) as file:
                 while chunk := response.read(_CHUNK_SIZE):
                     file.write(chunk)
                     received += len(chunk)
                     self._progress.update(index, received, total or None)
         return received
+
+
+def _parse_content_range(value: str | None) -> tuple[int, int | None]:
+    match = _CONTENT_RANGE.fullmatch(value or "")
+    if not match:
+        raise ValueError("server returned an invalid Content-Range header")
+    start = int(match.group(1))
+    total = None if match.group(3) == "*" else int(match.group(3))
+    return start, total
+
+
+def _unsatisfied_range_size(value: str | None) -> int | None:
+    match = re.fullmatch(r"bytes \*/(\d+)", value or "")
+    return int(match.group(1)) if match else None
