@@ -185,6 +185,7 @@ def _run_library(args: list[str], console: Console) -> int:
         query_to_dict,
         record_to_dict,
     )
+    from clipfetch.semantic import SemanticError
 
     def magnitude(value: str) -> int:
         try:
@@ -224,18 +225,37 @@ def _run_library(args: list[str], console: Console) -> int:
     info_parser = commands.add_parser("info", help="show all metadata for one clip id")
     info_parser.add_argument("values", nargs="+", metavar="[DIR] CLIP_ID")
     info_parser.add_argument("--json", action="store_true")
+    semantic_parser = commands.add_parser(
+        "semantic-index", help="build/update the optional local semantic index"
+    )
+    semantic_parser.add_argument("dir", nargs="?", default="reels", type=Path)
+    semantic_parser.add_argument("--batch-size", type=_positive_int, default=32)
+    search_parser = commands.add_parser("search", help="search captions and hashtags by meaning")
+    search_parser.add_argument("values", nargs="+", metavar="[DIR] QUERY")
+    search_parser.add_argument("--min-likes", type=magnitude)
+    search_parser.add_argument("--max-likes", type=magnitude)
+    search_parser.add_argument("--min-views", type=magnitude)
+    search_parser.add_argument("--max-views", type=magnitude)
+    search_parser.add_argument("--author", action="append", default=[])
+    search_parser.add_argument("--hashtag", action="append", default=[])
+    search_parser.add_argument("--platform", action="append", default=[])
+    search_parser.add_argument("--downloaded-after", type=date_value)
+    search_parser.add_argument("--downloaded-before", type=date_value)
+    search_parser.add_argument("--limit", type=_positive_int, default=20)
+    search_parser.add_argument("--json", action="store_true")
     try:
         parsed = parser.parse_args(args)
     except SystemExit as exit_:
         return int(exit_.code or 0)
     try:
         if parsed.command == "index":
-            report = index_library(parsed.dir)
+            catalog_report = index_library(parsed.dir)
             console.success(
                 "Catalog indexed: "
-                f"{report.scanned} scanned, {report.inserted} inserted, "
-                f"{report.updated} updated, {report.unchanged} unchanged, "
-                f"{report.missing} missing, {report.malformed_sidecars} malformed sidecar(s)."
+                f"{catalog_report.scanned} scanned, {catalog_report.inserted} inserted, "
+                f"{catalog_report.updated} updated, {catalog_report.unchanged} unchanged, "
+                f"{catalog_report.missing} missing, "
+                f"{catalog_report.malformed_sidecars} malformed sidecar(s)."
             )
             return 0
         if parsed.command == "list":
@@ -250,7 +270,7 @@ def _run_library(args: list[str], console: Console) -> int:
                 downloaded_after=parsed.downloaded_after,
                 downloaded_before=parsed.downloaded_before,
             )
-            result = query_library(
+            list_result = query_library(
                 parsed.dir,
                 filters,
                 sort=parsed.sort,
@@ -258,12 +278,91 @@ def _run_library(args: list[str], console: Console) -> int:
                 offset=parsed.offset,
             )
             if parsed.json:
-                console.print(json.dumps(query_to_dict(result), ensure_ascii=False, indent=2))
+                console.print(
+                    json.dumps(query_to_dict(list_result), ensure_ascii=False, indent=2)
+                )
             else:
-                _print_library_table(result.clips, console)
+                _print_library_table(list_result.clips, console)
                 console.info(
-                    f"{result.matched} matched, {result.excluded} excluded, "
-                    f"{result.unknown_required_metadata} lacked required metadata."
+                    f"{list_result.matched} matched, {list_result.excluded} excluded, "
+                    f"{list_result.unknown_required_metadata} lacked required metadata."
+                )
+            return 0
+        if parsed.command == "semantic-index":
+            from clipfetch.semantic import DEFAULT_CACHE_DIR, FastEmbedder, semantic_index
+
+            if not DEFAULT_CACHE_DIR.exists():
+                console.info(
+                    f"First use downloads about 220 MB to {DEFAULT_CACHE_DIR}; "
+                    "captions and vectors stay local."
+                )
+            embedder = FastEmbedder()
+            last_progress = 0
+
+            def show_progress(done: int, total: int) -> None:
+                nonlocal last_progress
+                if done == total or done - last_progress >= parsed.batch_size:
+                    console.info(f"Semantic indexing: {done}/{total}")
+                    last_progress = done
+
+            semantic_report = semantic_index(
+                parsed.dir,
+                embedder,
+                batch_size=parsed.batch_size,
+                on_progress=show_progress,
+            )
+            console.success(
+                f"Semantic index: {semantic_report.scanned} scanned, "
+                f"{semantic_report.indexed} indexed, "
+                f"{semantic_report.unchanged} unchanged, {semantic_report.empty} empty."
+            )
+            return 0
+        if parsed.command == "search":
+            from clipfetch.semantic import FastEmbedder, semantic_search
+
+            if len(parsed.values) == 1:
+                root, query = Path("reels"), parsed.values[0]
+            else:
+                root, query = Path(parsed.values[0]), " ".join(parsed.values[1:])
+            filters = ClipFilter(
+                min_likes=parsed.min_likes,
+                max_likes=parsed.max_likes,
+                min_views=parsed.min_views,
+                max_views=parsed.max_views,
+                authors=tuple(parsed.author),
+                hashtags=tuple(parsed.hashtag),
+                platforms=tuple(parsed.platform),
+                downloaded_after=parsed.downloaded_after,
+                downloaded_before=parsed.downloaded_before,
+            )
+            embedder = FastEmbedder()
+            search_result = semantic_search(
+                root, query, embedder, filters=filters, limit=parsed.limit
+            )
+            if parsed.json:
+                value = {
+                    "schema_version": 1,
+                    "model_id": embedder.model_id,
+                    "model_revision": embedder.revision,
+                    "query": query,
+                    "considered": search_result.considered,
+                    "unindexed": search_result.unindexed,
+                    "matches": [
+                        {"score": match.score, "clip": record_to_dict(match.record)}
+                        for match in search_result.matches
+                    ],
+                }
+                console.print(json.dumps(value, ensure_ascii=False, indent=2))
+            else:
+                for match in search_result.matches:
+                    console.print(
+                        f"{match.score:.3f}  {match.record.clip_id}  "
+                        f"{match.record.author or '?'}  {match.record.relative_path}"
+                    )
+                console.info(
+                    f"{len(search_result.matches)} result(s); "
+                    f"{search_result.unindexed} matching clip(s) "
+                    "were not indexed."
                 )
             return 0
         if len(parsed.values) == 1:
@@ -281,7 +380,7 @@ def _run_library(args: list[str], console: Console) -> int:
             for key, item in value.items():
                 console.print(f"{key.replace('_', ' ').title()}: {item}")
         return 0
-    except CatalogError as err:
+    except (CatalogError, SemanticError) as err:
         console.error(str(err))
         return 1
 

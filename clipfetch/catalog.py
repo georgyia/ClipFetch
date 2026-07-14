@@ -15,7 +15,7 @@ from clipfetch.model import Clip, ClipMetadata
 
 CATALOG_DIR = ".clipfetch"
 CATALOG_NAME = "catalog.sqlite3"
-CURRENT_SCHEMA_VERSION = 2
+CURRENT_SCHEMA_VERSION = 3
 
 _VIDEO_NAME = re.compile(r"^(reel|tiktok|short)_\d+_(.+)\.mp4$")
 _PLATFORM_FOR_NOUN = {"reel": "instagram", "tiktok": "tiktok", "short": "youtube"}
@@ -61,6 +61,20 @@ class CatalogRecord:
     published_at: str | None = None
 
 
+@dataclass(frozen=True)
+class EmbeddingRecord:
+    """One normalized semantic vector and the identity of its exact input/model."""
+
+    platform: str
+    clip_id: str
+    model_id: str
+    model_revision: str
+    input_hash: str
+    dimension: int
+    vector: bytes
+    generated_at: str
+
+
 Migration = Callable[[sqlite3.Connection], None]
 
 
@@ -99,7 +113,35 @@ def _migration_2(connection: sqlite3.Connection) -> None:
         connection.execute(f"ALTER TABLE clips ADD COLUMN {definition}")
 
 
-MIGRATIONS: dict[int, Migration] = {1: _migration_1, 2: _migration_2}
+def _migration_3(connection: sqlite3.Connection) -> None:
+    connection.execute(
+        """
+        CREATE TABLE semantic_embeddings (
+            platform TEXT NOT NULL,
+            clip_id TEXT NOT NULL,
+            model_id TEXT NOT NULL,
+            model_revision TEXT NOT NULL,
+            input_hash TEXT NOT NULL,
+            dimension INTEGER NOT NULL,
+            vector BLOB NOT NULL,
+            generated_at TEXT NOT NULL,
+            PRIMARY KEY (platform, clip_id, model_id, model_revision),
+            FOREIGN KEY (platform, clip_id) REFERENCES clips(platform, clip_id)
+                ON DELETE CASCADE
+        )
+        """
+    )
+    connection.execute(
+        "CREATE INDEX semantic_model_idx "
+        "ON semantic_embeddings(model_id, model_revision)"
+    )
+
+
+MIGRATIONS: dict[int, Migration] = {
+    1: _migration_1,
+    2: _migration_2,
+    3: _migration_3,
+}
 
 
 class Catalog:
@@ -267,6 +309,74 @@ class Catalog:
                         )
         return missing
 
+    def get_embedding(
+        self, platform: str, clip_id: str, model_id: str, model_revision: str
+    ) -> EmbeddingRecord | None:
+        row = self._connection.execute(
+            """
+            SELECT * FROM semantic_embeddings
+            WHERE platform = ? AND clip_id = ? AND model_id = ? AND model_revision = ?
+            """,
+            (platform, clip_id, model_id, model_revision),
+        ).fetchone()
+        return _embedding_from_row(row) if row else None
+
+    def embeddings_for(self, model_id: str, model_revision: str) -> list[EmbeddingRecord]:
+        rows = self._connection.execute(
+            """
+            SELECT * FROM semantic_embeddings
+            WHERE model_id = ? AND model_revision = ?
+            ORDER BY platform, clip_id
+            """,
+            (model_id, model_revision),
+        ).fetchall()
+        return [_embedding_from_row(row) for row in rows]
+
+    def store_embeddings(self, records: list[EmbeddingRecord]) -> None:
+        """Atomically store one completed batch (never half a batch)."""
+        if not records:
+            return
+        values = [
+            (
+                record.platform,
+                record.clip_id,
+                record.model_id,
+                record.model_revision,
+                record.input_hash,
+                record.dimension,
+                record.vector,
+                record.generated_at,
+            )
+            for record in records
+        ]
+        with self._lock, self._connection:
+            self._connection.executemany(
+                """
+                INSERT INTO semantic_embeddings (
+                    platform, clip_id, model_id, model_revision, input_hash,
+                    dimension, vector, generated_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(platform, clip_id, model_id, model_revision) DO UPDATE SET
+                    input_hash = excluded.input_hash,
+                    dimension = excluded.dimension,
+                    vector = excluded.vector,
+                    generated_at = excluded.generated_at
+                """,
+                values,
+            )
+
+    def delete_embedding(
+        self, platform: str, clip_id: str, model_id: str, model_revision: str
+    ) -> None:
+        with self._lock, self._connection:
+            self._connection.execute(
+                """
+                DELETE FROM semantic_embeddings
+                WHERE platform = ? AND clip_id = ? AND model_id = ? AND model_revision = ?
+                """,
+                (platform, clip_id, model_id, model_revision),
+            )
+
 
 def _migrate(connection: sqlite3.Connection) -> None:
     """Apply forward-only migrations atomically."""
@@ -399,4 +509,17 @@ def _record_from_row(row: sqlite3.Row) -> CatalogRecord:
         shares=row["shares"],
         duration_seconds=row["duration_seconds"],
         published_at=row["published_at"],
+    )
+
+
+def _embedding_from_row(row: sqlite3.Row) -> EmbeddingRecord:
+    return EmbeddingRecord(
+        platform=row["platform"],
+        clip_id=row["clip_id"],
+        model_id=row["model_id"],
+        model_revision=row["model_revision"],
+        input_hash=row["input_hash"],
+        dimension=row["dimension"],
+        vector=row["vector"],
+        generated_at=row["generated_at"],
     )

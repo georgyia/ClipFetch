@@ -72,6 +72,10 @@ clipfetch library index reels        # rebuild/reconcile the portable local cata
 clipfetch library list reels --min-likes 1m --hashtag entrepreneurship
 clipfetch library list reels --author nasa --author spacex --sort views --json
 clipfetch library info reels ABC123  # inspect one cataloged clip
+pip install "clipfetch[semantic]"    # optional; Python 3.10+
+clipfetch library semantic-index reels
+clipfetch library search reels "entrepreneurship and startup advice"
+clipfetch library search reels "emprendimiento" --min-likes 1m
 clipfetch --help                     # all options
 ```
 
@@ -90,6 +94,25 @@ Library filters combine different dimensions with AND; repeated values within on
 use OR. Numeric thresholds accept `k`, `m`, and `b` suffixes (including `1.5m`). A clip with
 unknown metadata never satisfies a filter that requires that value, and the human summary
 reports those exclusions explicitly. `--json` is stable, unstyled output for scripts.
+
+### Local semantic search
+
+The optional semantic extra uses FastEmbed/ONNX and the quantized 384-dimensional
+`sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2` model. First use downloads
+about 220 MB into `~/.cache/clipfetch/fastembed`; after that, indexing and search work
+offline. The base installation stays Playwright-only, and metadata commands never import
+or require FastEmbed. FastEmbed currently requires Python 3.10 or newer.
+
+Semantic documents contain only the locally stored caption and normalized hashtags.
+Inference runs in-process: captions, queries, and vectors are never sent to an inference
+API. Normalized float32 vectors live in the same local SQLite catalog with the model id,
+pinned integration revision, input hash, and generation time. Re-indexing is incremental
+and safely resumes after interruption.
+
+Semantic similarity is approximate: short or missing captions, slang, and languages with
+less model coverage can reduce result quality. Combine search with metadata filters when
+precision matters. See [the reproducible CPU benchmark](docs/semantic-benchmark.md) for
+the 100/1,000/10,000-caption timing and peak-memory procedure.
 
 Firefox import needs no extra package. Modern Windows Chrome encryption additionally
 requires `pip install "clipfetch[cookies]"`; Safari may require granting the terminal

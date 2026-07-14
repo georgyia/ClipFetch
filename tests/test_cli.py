@@ -169,3 +169,53 @@ def test_library_list_invalid_number_and_missing_clip_exit_nonzero(tmp_path, cap
     assert main(["library", "list", str(tmp_path), "--min-likes", "-1"]) == 2
     assert main(["library", "info", str(tmp_path), "NOPE"]) == 1
     assert "not found" in capsys.readouterr().out
+
+
+def test_semantic_cli_uses_local_index_and_json_has_no_banner(tmp_path, capsys, monkeypatch):
+    video = tmp_path / "reel_001_ABC.mp4"
+    video.write_bytes(b"video")
+    video.with_suffix(".json").write_text(
+        json.dumps(
+            {
+                "schema_version": 2,
+                "platform": "instagram",
+                "id": "ABC",
+                "caption": "startup advice",
+                "hashtags": ["entrepreneurship"],
+                "likes": 2_000_000,
+            }
+        ),
+        encoding="utf-8",
+    )
+    assert main(["library", "index", str(tmp_path)]) == 0
+    capsys.readouterr()
+
+    class Fake:
+        model_id = "test/model"
+        revision = "v1"
+
+        def embed(self, texts):
+            return [[1.0, 0.0] if "startup" in text else [0.9, 0.1] for text in texts]
+
+    from clipfetch import semantic
+
+    monkeypatch.setattr(semantic, "FastEmbedder", Fake)
+    assert main(["library", "semantic-index", str(tmp_path)]) == 0
+    assert "1 indexed" in capsys.readouterr().out
+
+    assert main(
+        [
+            "library",
+            "search",
+            str(tmp_path),
+            "entrepreneurship",
+            "--min-likes",
+            "1m",
+            "--json",
+        ]
+    ) == 0
+    output = capsys.readouterr().out
+    assert "ClipFetch" not in output and "\x1b[" not in output
+    value = json.loads(output)
+    assert value["matches"][0]["clip"]["id"] == "ABC"
+    assert value["matches"][0]["score"] > 0.9
