@@ -13,7 +13,14 @@ import time
 from collections.abc import Iterator
 from typing import Any
 
-from clipfetch.model import Clip, Quality
+from clipfetch.model import (
+    Clip,
+    Quality,
+    extract_hashtags,
+    optional_count,
+    optional_duration,
+    timestamp_seconds,
+)
 from clipfetch.platforms.base import Platform
 
 _HOME = "https://www.instagram.com/"
@@ -148,14 +155,21 @@ class Instagram(Platform):
             code = node.get("code")
             url = self._pick_url(node.get("video_versions"), quality)
             if isinstance(code, str) and code and url:
+                caption = self._caption(node)
                 yield Clip(
                     self.key,
                     ident=code,
                     video_url=url,
                     url=f"{_HOME}reel/{code}/",
                     author=self._author(node),
-                    caption=self._caption(node),
+                    caption=caption,
                     likes=self._likes(node),
+                    hashtags=extract_hashtags(caption),
+                    views=self._count(node, "play_count", "view_count"),
+                    comments_count=self._count(node, "comment_count"),
+                    shares=self._count(node, "share_count", "reshare_count"),
+                    duration_seconds=optional_duration(node.get("video_duration")),
+                    published_at=timestamp_seconds(node.get("taken_at")),
                 )
                 return  # a matched media item holds no further items
             for value in node.values():
@@ -181,8 +195,15 @@ class Instagram(Platform):
 
     @staticmethod
     def _likes(node: dict) -> int | None:
-        likes = node.get("like_count")
-        return likes if isinstance(likes, int) and not isinstance(likes, bool) else None
+        return optional_count(node.get("like_count"))
+
+    @staticmethod
+    def _count(node: dict, *keys: str) -> int | None:
+        for key in keys:
+            value = optional_count(node.get(key))
+            if value is not None:
+                return value
+        return None
 
     @staticmethod
     def _pick_url(versions: Any, quality: Quality) -> str | None:

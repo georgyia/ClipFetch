@@ -98,7 +98,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--metadata",
         action="store_true",
-        help="save caption, author, likes and post URL as a .json next to each clip",
+        help="save normalized platform metadata as schema-v2 JSON next to each clip",
     )
     parser.add_argument(
         "--headed",

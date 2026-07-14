@@ -12,7 +12,14 @@ from __future__ import annotations
 from collections.abc import Iterator
 from typing import Any
 
-from clipfetch.model import Clip, Quality
+from clipfetch.model import (
+    Clip,
+    Quality,
+    extract_hashtags,
+    optional_count,
+    optional_duration,
+    timestamp_seconds,
+)
 from clipfetch.platforms.base import Platform
 
 _HOME = "https://www.tiktok.com/"
@@ -49,6 +56,7 @@ class TikTok(Platform):
                 url = self._pick_url(video, quality)
                 if url:
                     author = self._author(node)
+                    caption = node.get("desc") if isinstance(node.get("desc"), str) else None
                     yield Clip(
                         self.key,
                         ident=ident,
@@ -56,8 +64,14 @@ class TikTok(Platform):
                         referer=_HOME,
                         url=f"{_HOME}@{author}/video/{ident}" if author else None,
                         author=author,
-                        caption=node.get("desc") if isinstance(node.get("desc"), str) else None,
+                        caption=caption,
                         likes=self._likes(node),
+                        hashtags=extract_hashtags(caption),
+                        views=self._stat(node, "playCount"),
+                        comments_count=self._stat(node, "commentCount"),
+                        shares=self._stat(node, "shareCount"),
+                        duration_seconds=optional_duration(video.get("duration")),
+                        published_at=timestamp_seconds(node.get("createTime")),
                     )
                     return
             for value in node.values():
@@ -77,11 +91,13 @@ class TikTok(Platform):
 
     @staticmethod
     def _likes(node: dict) -> int | None:
+        return TikTok._stat(node, "diggCount")
+
+    @staticmethod
+    def _stat(node: dict, key: str) -> int | None:
         stats = node.get("stats")
         if isinstance(stats, dict):
-            likes = stats.get("diggCount")
-            if isinstance(likes, int) and not isinstance(likes, bool):
-                return likes
+            return optional_count(stats.get(key))
         return None
 
     @staticmethod

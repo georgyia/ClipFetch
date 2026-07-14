@@ -122,12 +122,19 @@ def test_write_sidecar_contains_clip_metadata(tmp_path):
     sidecar = write_sidecar(video, clip)
     assert sidecar == tmp_path / "reel_001_ABC.json"
     assert json.loads(sidecar.read_text(encoding="utf-8")) == {
+        "schema_version": 2,
         "platform": "instagram",
         "id": "ABC",
         "url": "https://www.instagram.com/reel/ABC/",
         "author": "nasa",
         "caption": "space",
         "likes": 42,
+        "hashtags": [],
+        "views": None,
+        "comments_count": None,
+        "shares": None,
+        "duration_seconds": None,
+        "published_at": None,
     }
 
 

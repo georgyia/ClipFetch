@@ -11,11 +11,11 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable
 
-from clipfetch.model import Clip
+from clipfetch.model import Clip, ClipMetadata
 
 CATALOG_DIR = ".clipfetch"
 CATALOG_NAME = "catalog.sqlite3"
-CURRENT_SCHEMA_VERSION = 1
+CURRENT_SCHEMA_VERSION = 2
 
 _VIDEO_NAME = re.compile(r"^(reel|tiktok|short)_\d+_(.+)\.mp4$")
 _PLATFORM_FOR_NOUN = {"reel": "instagram", "tiktok": "tiktok", "short": "youtube"}
@@ -53,6 +53,12 @@ class CatalogRecord:
     likes: int | None
     metadata_state: str
     available: bool = True
+    hashtags: tuple[str, ...] = ()
+    views: int | None = None
+    comments_count: int | None = None
+    shares: int | None = None
+    duration_seconds: float | None = None
+    published_at: str | None = None
 
 
 Migration = Callable[[sqlite3.Connection], None]
@@ -81,7 +87,19 @@ def _migration_1(connection: sqlite3.Connection) -> None:
     connection.execute("CREATE INDEX clips_path_idx ON clips(relative_path)")
 
 
-MIGRATIONS: dict[int, Migration] = {1: _migration_1}
+def _migration_2(connection: sqlite3.Connection) -> None:
+    for definition in (
+        "hashtags_json TEXT NOT NULL DEFAULT '[]'",
+        "views INTEGER",
+        "comments_count INTEGER",
+        "shares INTEGER",
+        "duration_seconds REAL",
+        "published_at TEXT",
+    ):
+        connection.execute(f"ALTER TABLE clips ADD COLUMN {definition}")
+
+
+MIGRATIONS: dict[int, Migration] = {1: _migration_1, 2: _migration_2}
 
 
 class Catalog:
@@ -167,6 +185,16 @@ class Catalog:
             caption=clip.caption,
             likes=clip.likes,
             metadata_state="sidecar" if resolved.with_suffix(".json").exists() else "catalog",
+            hashtags=clip.normalized_metadata().hashtags,
+            views=clip.views,
+            comments_count=clip.comments_count,
+            shares=clip.shares,
+            duration_seconds=clip.duration_seconds,
+            published_at=(
+                clip.published_at.astimezone(timezone.utc).isoformat()
+                if clip.published_at
+                else None
+            ),
         )
         return self.upsert(record)
 
@@ -187,6 +215,12 @@ class Catalog:
             record.likes,
             record.metadata_state,
             int(record.available),
+            json.dumps(record.hashtags, ensure_ascii=False),
+            record.views,
+            record.comments_count,
+            record.shares,
+            record.duration_seconds,
+            record.published_at,
         )
         with self._lock, self._connection:
             self._connection.execute(
@@ -194,8 +228,9 @@ class Catalog:
                 INSERT INTO clips (
                     platform, clip_id, relative_path, file_size, file_mtime_ns,
                     downloaded_at, source_url, author, caption, likes,
-                    metadata_state, available
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    metadata_state, available, hashtags_json, views,
+                    comments_count, shares, duration_seconds, published_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(platform, clip_id) DO UPDATE SET
                     relative_path = excluded.relative_path,
                     file_size = excluded.file_size,
@@ -206,7 +241,13 @@ class Catalog:
                     caption = excluded.caption,
                     likes = excluded.likes,
                     metadata_state = excluded.metadata_state,
-                    available = excluded.available
+                    available = excluded.available,
+                    hashtags_json = excluded.hashtags_json,
+                    views = excluded.views,
+                    comments_count = excluded.comments_count,
+                    shares = excluded.shares,
+                    duration_seconds = excluded.duration_seconds,
+                    published_at = excluded.published_at
                 """,
                 values,
             )
@@ -272,6 +313,7 @@ def index_library(root: Path) -> IndexReport:
             malformed += int(bad_sidecar)
             platform = _text(metadata.get("platform")) or _PLATFORM_FOR_NOUN[noun]
             clip_id = _text(metadata.get("id")) or filename_id
+            normalized = ClipMetadata.from_dict(metadata)
             existing = catalog.get(platform, clip_id)
             stat = path.stat()
             downloaded_at = (
@@ -286,12 +328,26 @@ def index_library(root: Path) -> IndexReport:
                 file_size=stat.st_size,
                 file_mtime_ns=stat.st_mtime_ns,
                 downloaded_at=downloaded_at,
-                source_url=_text(metadata.get("url")),
-                author=_text(metadata.get("author")),
-                caption=_text(metadata.get("caption")),
-                likes=_integer(metadata.get("likes")),
+                source_url=normalized.url,
+                author=normalized.author,
+                caption=normalized.caption,
+                likes=normalized.likes,
                 metadata_state=(
-                    "malformed" if bad_sidecar else "sidecar" if metadata else "missing"
+                    "malformed"
+                    if bad_sidecar
+                    else "sidecar-v2"
+                    if metadata.get("schema_version") == 2
+                    else "legacy-sidecar"
+                    if metadata
+                    else "missing"
+                ),
+                hashtags=normalized.hashtags,
+                views=normalized.views,
+                comments_count=normalized.comments_count,
+                shares=normalized.shares,
+                duration_seconds=normalized.duration_seconds,
+                published_at=(
+                    normalized.published_at.isoformat() if normalized.published_at else None
                 ),
             )
             state = catalog.upsert(record)
@@ -323,10 +379,6 @@ def _text(value: Any) -> str | None:
     return value if isinstance(value, str) else None
 
 
-def _integer(value: Any) -> int | None:
-    return value if isinstance(value, int) and not isinstance(value, bool) else None
-
-
 def _record_from_row(row: sqlite3.Row) -> CatalogRecord:
     return CatalogRecord(
         platform=row["platform"],
@@ -341,4 +393,10 @@ def _record_from_row(row: sqlite3.Row) -> CatalogRecord:
         likes=row["likes"],
         metadata_state=row["metadata_state"],
         available=bool(row["available"]),
+        hashtags=tuple(json.loads(row["hashtags_json"])),
+        views=row["views"],
+        comments_count=row["comments_count"],
+        shares=row["shares"],
+        duration_seconds=row["duration_seconds"],
+        published_at=row["published_at"],
     )

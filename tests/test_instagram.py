@@ -1,3 +1,5 @@
+from datetime import datetime, timezone
+
 from clipfetch.model import Clip, Quality
 from clipfetch.platforms.instagram import Instagram
 
@@ -70,6 +72,46 @@ def test_metadata_ignores_malformed_fields():
     }
     (clip,) = _clips(payload)
     assert clip.author is None and clip.caption is None and clip.likes is None
+
+
+def test_extended_metadata_is_normalized_from_same_payload():
+    payload = {
+        "media": {
+            "code": "RICH",
+            "caption": {"text": "Go #Startup, #CAFÉ! #startup #ქართული 🚀 #AI"},
+            "like_count": "1200",
+            "play_count": "3400",
+            "comment_count": 12,
+            "share_count": 3,
+            "video_duration": "9.5",
+            "taken_at": "1767225600",
+            "video_versions": [{"url": "https://cdn.test/rich.mp4", "width": 720}],
+        }
+    }
+    (clip,) = _clips(payload)
+    assert clip.hashtags == ("startup", "café", "ქართული", "ai")
+    assert (clip.likes, clip.views, clip.comments_count, clip.shares) == (1200, 3400, 12, 3)
+    assert clip.duration_seconds == 9.5
+    assert clip.published_at == datetime(2026, 1, 1, tzinfo=timezone.utc)
+
+
+def test_extended_metadata_rejects_bool_negative_and_timestamp_milliseconds():
+    payload = {
+        "media": {
+            "code": "BAD",
+            "like_count": True,
+            "play_count": -1,
+            "comment_count": "many",
+            "share_count": False,
+            "video_duration": float("inf"),
+            "taken_at": 1767225600000,
+            "video_versions": [{"url": "https://cdn.test/bad.mp4", "width": 720}],
+        }
+    }
+    (clip,) = _clips(payload)
+    assert clip.likes is None and clip.views is None
+    assert clip.comments_count is None and clip.shares is None
+    assert clip.duration_seconds is None and clip.published_at is None
 
 
 def test_quality_selection():

@@ -21,8 +21,8 @@ ready to watch on a flight, on the train, or anywhere without a connection.
 - **Watch offline** — `clipfetch watch` plays a downloaded folder one clip after another.
 - **Picks up where it left off** — re-running skips completed reels and resumes partial files.
 - **Quality control** — `--quality high|medium|low` chooses the rendition.
-- **Metadata sidecars** — `--metadata` writes the caption, author, like count and post URL
-  as a `.json` file next to each downloaded clip.
+- **Metadata sidecars** — `--metadata` writes normalized, human-readable JSON beside each
+  clip: caption, author, hashtags, engagement counts, duration, publication time and URL.
 - **Portable local catalog** — every completed clip is recorded automatically in
   `<output>/.clipfetch/catalog.sqlite3` for fast offline library operations.
 - **Self-contained** — no third-party downloader libraries; the extraction and download
@@ -78,6 +78,10 @@ The SQLite catalog stores video paths relative to the output folder, so moving t
 folder keeps it portable. If a catalog is deleted, damaged, or temporarily unwritable,
 the downloaded videos remain usable; `clipfetch library index DIR` reconstructs it from
 supported filenames and any JSON sidecars without renaming or changing video files.
+
+Metadata is best-effort and platform-dependent: unavailable values are stored as `null`,
+never guessed as zero. New sidecars use schema version 2; older unversioned sidecars remain
+readable. Expiring CDN URLs, authentication headers, cookies, and raw payloads are excluded.
 
 Firefox import needs no extra package. Modern Windows Chrome encryption additionally
 requires `pip install "clipfetch[cookies]"`; Safari may require granting the terminal

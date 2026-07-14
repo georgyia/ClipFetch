@@ -26,7 +26,7 @@ def test_catalog_creation_reopening_and_unique_upsert(tmp_path):
         likes=42,
     )
     with Catalog.open(tmp_path) as catalog:
-        assert catalog.schema_version == 1
+        assert catalog.schema_version == 2
         assert catalog.upsert_download(clip, video) == "inserted"
         assert catalog.upsert_download(clip, video) == "unchanged"
 
@@ -120,6 +120,34 @@ def test_failed_schema_migration_rolls_back(tmp_path, monkeypatch):
     names = {row[0] for row in connection.execute("SELECT name FROM sqlite_master")}
     assert "should_rollback" not in names
     assert connection.execute("SELECT version FROM schema_version").fetchone()[0] == 0
+
+
+def test_v1_catalog_migrates_without_losing_existing_metadata(tmp_path):
+    from clipfetch.catalog import MIGRATIONS
+
+    database_dir = tmp_path / ".clipfetch"
+    database_dir.mkdir()
+    connection = sqlite3.connect(database_dir / "catalog.sqlite3")
+    connection.execute("CREATE TABLE schema_version (version INTEGER NOT NULL)")
+    connection.execute("INSERT INTO schema_version VALUES (1)")
+    MIGRATIONS[1](connection)
+    connection.execute(
+        """
+        INSERT INTO clips VALUES (
+            'instagram', 'OLD', 'reel_001_OLD.mp4', 10, 20,
+            '2026-01-01T00:00:00+00:00', NULL, 'nasa', 'space', 42, 'sidecar', 1
+        )
+        """
+    )
+    connection.commit()
+    connection.close()
+
+    with Catalog.open(tmp_path) as catalog:
+        assert catalog.schema_version == 2
+        record = catalog.get("instagram", "OLD")
+        assert record is not None
+        assert (record.author, record.caption, record.likes) == ("nasa", "space", 42)
+        assert record.views is None and record.hashtags == ()
 
 
 def test_missing_library_is_actionable(tmp_path):

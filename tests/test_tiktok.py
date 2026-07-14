@@ -64,6 +64,30 @@ def test_metadata_absent_stays_none():
     assert second.caption is None and second.author is None
 
 
+def test_extended_metadata_is_extracted_without_an_extra_request():
+    payload = {
+        "itemList": [
+            {
+                "id": "42",
+                "desc": "Build it #Emprendimiento #STARTUP #startup",
+                "createTime": "1767225600",
+                "stats": {
+                    "diggCount": 99,
+                    "playCount": "1000",
+                    "commentCount": 8,
+                    "shareCount": 7,
+                },
+                "video": {"playAddr": "https://cdn.tt/42.mp4", "duration": 12},
+            }
+        ]
+    }
+    (clip,) = _clips(payload)
+    assert clip.hashtags == ("emprendimiento", "startup")
+    assert (clip.likes, clip.views, clip.comments_count, clip.shares) == (99, 1000, 8, 7)
+    assert clip.duration_seconds == 12
+    assert clip.published_at.isoformat() == "2026-01-01T00:00:00+00:00"
+
+
 def test_quality_selection_over_bitrates():
     assert _clips(FEED_PAYLOAD, Quality.LOW)[0].video_url == "https://cdn.tt/lo.mp4"
     assert _clips(FEED_PAYLOAD, Quality.MEDIUM)[0].video_url == "https://cdn.tt/mid.mp4"
