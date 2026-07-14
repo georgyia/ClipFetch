@@ -69,6 +69,9 @@ clipfetch -reels 25 --import-cookies safari   # Safari on macOS
 clipfetch watch reels                # play the downloaded folder in sequence
 clipfetch watch reels --shuffle      # …in random order
 clipfetch library index reels        # rebuild/reconcile the portable local catalog
+clipfetch library list reels --min-likes 1m --hashtag entrepreneurship
+clipfetch library list reels --author nasa --author spacex --sort views --json
+clipfetch library info reels ABC123  # inspect one cataloged clip
 clipfetch --help                     # all options
 ```
 
@@ -82,6 +85,11 @@ supported filenames and any JSON sidecars without renaming or changing video fil
 Metadata is best-effort and platform-dependent: unavailable values are stored as `null`,
 never guessed as zero. New sidecars use schema version 2; older unversioned sidecars remain
 readable. Expiring CDN URLs, authentication headers, cookies, and raw payloads are excluded.
+
+Library filters combine different dimensions with AND; repeated values within one dimension
+use OR. Numeric thresholds accept `k`, `m`, and `b` suffixes (including `1.5m`). A clip with
+unknown metadata never satisfies a filter that requires that value, and the human summary
+reports those exclusions explicitly. `--json` is stable, unstyled output for scripts.
 
 Firefox import needs no extra package. Modern Windows Chrome encryption additionally
 requires `pip install "clipfetch[cookies]"`; Safari may require granting the terminal

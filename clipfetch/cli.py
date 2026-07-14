@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import sys
 from dataclasses import dataclass
 from pathlib import Path
@@ -39,6 +40,16 @@ def _positive_int(value: str) -> int:
         raise argparse.ArgumentTypeError(f"{value!r} is not a number") from None
     if number < 1:
         raise argparse.ArgumentTypeError("must be at least 1")
+    return number
+
+
+def _nonnegative_int(value: str) -> int:
+    try:
+        number = int(value)
+    except ValueError:
+        raise argparse.ArgumentTypeError(f"{value!r} is not a number") from None
+    if number < 0:
+        raise argparse.ArgumentTypeError("must be at least 0")
     return number
 
 
@@ -165,6 +176,27 @@ def _run_watch(args: list[str], console: Console) -> int:
 def _run_library(args: list[str], console: Console) -> int:
     """Dispatch catalog maintenance commands without importing browser code."""
     from clipfetch.catalog import CatalogError, index_library
+    from clipfetch.library import (
+        ClipFilter,
+        find_clip,
+        parse_date,
+        parse_magnitude,
+        query_library,
+        query_to_dict,
+        record_to_dict,
+    )
+
+    def magnitude(value: str) -> int:
+        try:
+            return parse_magnitude(value)
+        except ValueError as err:
+            raise argparse.ArgumentTypeError(str(err)) from err
+
+    def date_value(value: str):
+        try:
+            return parse_date(value)
+        except ValueError as err:
+            raise argparse.ArgumentTypeError(str(err)) from err
 
     parser = argparse.ArgumentParser(prog="clipfetch library")
     commands = parser.add_subparsers(dest="command", required=True)
@@ -172,22 +204,107 @@ def _run_library(args: list[str], console: Console) -> int:
         "index", help="index existing videos and reconcile the local catalog"
     )
     index_parser.add_argument("dir", nargs="?", default="reels", type=Path)
+    list_parser = commands.add_parser("list", help="list and filter cataloged clips")
+    list_parser.add_argument("dir", nargs="?", default="reels", type=Path)
+    list_parser.add_argument("--min-likes", type=magnitude)
+    list_parser.add_argument("--max-likes", type=magnitude)
+    list_parser.add_argument("--min-views", type=magnitude)
+    list_parser.add_argument("--max-views", type=magnitude)
+    list_parser.add_argument("--author", action="append", default=[])
+    list_parser.add_argument("--hashtag", action="append", default=[])
+    list_parser.add_argument("--platform", action="append", default=[])
+    list_parser.add_argument("--downloaded-after", type=date_value)
+    list_parser.add_argument("--downloaded-before", type=date_value)
+    list_parser.add_argument(
+        "--sort", choices=["likes", "views", "date", "author"], default="date"
+    )
+    list_parser.add_argument("--limit", type=_positive_int)
+    list_parser.add_argument("--offset", type=_nonnegative_int, default=0)
+    list_parser.add_argument("--json", action="store_true")
+    info_parser = commands.add_parser("info", help="show all metadata for one clip id")
+    info_parser.add_argument("values", nargs="+", metavar="[DIR] CLIP_ID")
+    info_parser.add_argument("--json", action="store_true")
     try:
         parsed = parser.parse_args(args)
     except SystemExit as exit_:
         return int(exit_.code or 0)
     try:
-        report = index_library(parsed.dir)
+        if parsed.command == "index":
+            report = index_library(parsed.dir)
+            console.success(
+                "Catalog indexed: "
+                f"{report.scanned} scanned, {report.inserted} inserted, "
+                f"{report.updated} updated, {report.unchanged} unchanged, "
+                f"{report.missing} missing, {report.malformed_sidecars} malformed sidecar(s)."
+            )
+            return 0
+        if parsed.command == "list":
+            filters = ClipFilter(
+                min_likes=parsed.min_likes,
+                max_likes=parsed.max_likes,
+                min_views=parsed.min_views,
+                max_views=parsed.max_views,
+                authors=tuple(parsed.author),
+                hashtags=tuple(parsed.hashtag),
+                platforms=tuple(parsed.platform),
+                downloaded_after=parsed.downloaded_after,
+                downloaded_before=parsed.downloaded_before,
+            )
+            result = query_library(
+                parsed.dir,
+                filters,
+                sort=parsed.sort,
+                limit=parsed.limit,
+                offset=parsed.offset,
+            )
+            if parsed.json:
+                console.print(json.dumps(query_to_dict(result), ensure_ascii=False, indent=2))
+            else:
+                _print_library_table(result.clips, console)
+                console.info(
+                    f"{result.matched} matched, {result.excluded} excluded, "
+                    f"{result.unknown_required_metadata} lacked required metadata."
+                )
+            return 0
+        if len(parsed.values) == 1:
+            root, clip_id = Path("reels"), parsed.values[0]
+        elif len(parsed.values) == 2:
+            root, clip_id = Path(parsed.values[0]), parsed.values[1]
+        else:
+            console.error("library info expects [DIR] CLIP_ID")
+            return 2
+        record = find_clip(root, clip_id)
+        value = record_to_dict(record)
+        if parsed.json:
+            console.print(json.dumps(value, ensure_ascii=False, indent=2))
+        else:
+            for key, item in value.items():
+                console.print(f"{key.replace('_', ' ').title()}: {item}")
+        return 0
     except CatalogError as err:
         console.error(str(err))
         return 1
-    console.success(
-        "Catalog indexed: "
-        f"{report.scanned} scanned, {report.inserted} inserted, "
-        f"{report.updated} updated, {report.unchanged} unchanged, "
-        f"{report.missing} missing, {report.malformed_sidecars} malformed sidecar(s)."
-    )
-    return 0
+
+
+def _print_library_table(records, console: Console) -> None:
+    """Print a compact dependency-free table for human library listings."""
+    headers = ("ID", "PLATFORM", "AUTHOR", "LIKES", "VIEWS", "STATUS", "PATH")
+    rows = [
+        (
+            record.clip_id,
+            record.platform,
+            record.author or "?",
+            str(record.likes) if record.likes is not None else "?",
+            str(record.views) if record.views is not None else "?",
+            "present" if record.available else "missing",
+            record.relative_path,
+        )
+        for record in records
+    ]
+    widths = [max([len(headers[i]), *(len(row[i]) for row in rows)]) for i in range(len(headers))]
+    console.print("  ".join(value.ljust(widths[i]) for i, value in enumerate(headers)))
+    for row in rows:
+        console.print("  ".join(value.ljust(widths[i]) for i, value in enumerate(row)))
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -200,7 +317,8 @@ def main(argv: list[str] | None = None) -> int:
         return _run_watch(args[1:], console)
 
     if args and args[0] == "library":
-        console.banner(__version__)
+        if "--json" not in args and not any(value in args for value in ("-h", "--help")):
+            console.banner(__version__)
         return _run_library(args[1:], console)
 
     try:

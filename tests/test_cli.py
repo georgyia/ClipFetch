@@ -1,3 +1,4 @@
+import json
 from pathlib import Path
 
 import pytest
@@ -108,3 +109,63 @@ def test_library_index_cli_reports_counts(tmp_path, capsys):
 def test_library_index_missing_directory_is_nonzero(tmp_path, capsys):
     assert main(["library", "index", str(tmp_path / "missing")]) == 1
     assert "does not exist" in capsys.readouterr().out
+
+
+def test_library_list_json_has_no_banner_or_ansi_and_filters(tmp_path, capsys):
+    video = tmp_path / "reel_001_ABC.mp4"
+    video.write_bytes(b"video")
+    video.with_suffix(".json").write_text(
+        json.dumps(
+            {
+                "schema_version": 2,
+                "platform": "instagram",
+                "id": "ABC",
+                "author": "nasa",
+                "caption": "Build #Entrepreneurship",
+                "likes": 1_500_000,
+                "hashtags": ["entrepreneurship"],
+                "views": 10_000_000,
+            }
+        ),
+        encoding="utf-8",
+    )
+    assert main(["library", "index", str(tmp_path)]) == 0
+    capsys.readouterr()
+    assert main(
+        [
+            "library",
+            "list",
+            str(tmp_path),
+            "--min-likes",
+            "1m",
+            "--hashtag",
+            "entrepreneurship",
+            "--json",
+        ]
+    ) == 0
+    output = capsys.readouterr().out
+    assert "ClipFetch" not in output and "\x1b[" not in output
+    value = json.loads(output)
+    assert value["matched"] == 1
+    assert value["clips"][0]["id"] == "ABC"
+
+
+def test_library_info_and_human_summary(tmp_path, capsys):
+    video = tmp_path / "reel_001_ABC.mp4"
+    video.write_bytes(b"video")
+    assert main(["library", "index", str(tmp_path)]) == 0
+    capsys.readouterr()
+
+    assert main(["library", "list", str(tmp_path), "--min-likes", "1m"]) == 0
+    output = capsys.readouterr().out
+    assert "0 matched" in output and "1 lacked required metadata" in output
+
+    assert main(["library", "info", str(tmp_path), "ABC", "--json"]) == 0
+    info = json.loads(capsys.readouterr().out)
+    assert info["id"] == "ABC" and info["available"] is True
+
+
+def test_library_list_invalid_number_and_missing_clip_exit_nonzero(tmp_path, capsys):
+    assert main(["library", "list", str(tmp_path), "--min-likes", "-1"]) == 2
+    assert main(["library", "info", str(tmp_path), "NOPE"]) == 1
+    assert "not found" in capsys.readouterr().out
