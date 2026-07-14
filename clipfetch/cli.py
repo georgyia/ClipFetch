@@ -162,6 +162,34 @@ def _run_watch(args: list[str], console: Console) -> int:
     return watch(parsed.dir, console, shuffle=parsed.shuffle)
 
 
+def _run_library(args: list[str], console: Console) -> int:
+    """Dispatch catalog maintenance commands without importing browser code."""
+    from clipfetch.catalog import CatalogError, index_library
+
+    parser = argparse.ArgumentParser(prog="clipfetch library")
+    commands = parser.add_subparsers(dest="command", required=True)
+    index_parser = commands.add_parser(
+        "index", help="index existing videos and reconcile the local catalog"
+    )
+    index_parser.add_argument("dir", nargs="?", default="reels", type=Path)
+    try:
+        parsed = parser.parse_args(args)
+    except SystemExit as exit_:
+        return int(exit_.code or 0)
+    try:
+        report = index_library(parsed.dir)
+    except CatalogError as err:
+        console.error(str(err))
+        return 1
+    console.success(
+        "Catalog indexed: "
+        f"{report.scanned} scanned, {report.inserted} inserted, "
+        f"{report.updated} updated, {report.unchanged} unchanged, "
+        f"{report.missing} missing, {report.malformed_sidecars} malformed sidecar(s)."
+    )
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     args = sys.argv[1:] if argv is None else argv
     console = Console()
@@ -170,6 +198,10 @@ def main(argv: list[str] | None = None) -> int:
         console.banner(__version__)
         console.dim("Personal use only — respect creators and platform Terms of Use.")
         return _run_watch(args[1:], console)
+
+    if args and args[0] == "library":
+        console.banner(__version__)
+        return _run_library(args[1:], console)
 
     try:
         opts = parse_args(args)
@@ -304,6 +336,11 @@ def _run(opts: Options, console: Console) -> None:
     for result in results:
         if not result.ok:
             console.error(f"{result.clip.ident}: {result.error}")
+        elif result.catalog_error:
+            console.error(
+                f"Catalog warning for {result.clip.ident}: {result.catalog_error}. "
+                f"The video is safe; retry with 'clipfetch library index {opts.out}'."
+            )
     if not downloaded:
         if platform.experimental:
             raise DownloadError(

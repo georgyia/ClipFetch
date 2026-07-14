@@ -98,6 +98,7 @@ def test_parallel_downloads_write_complete_files(tmp_path, video_server):
         assert result.path.read_bytes() == f"clip{i}".encode() * 5000
         assert result.size == result.path.stat().st_size
     assert not list(tmp_path.glob("*.part"))  # no leftover temp files
+    assert (tmp_path / ".clipfetch" / "catalog.sqlite3").exists()
 
 
 def test_existing_file_is_skipped_not_refetched(tmp_path, video_server):
@@ -177,6 +178,11 @@ def test_failed_download_reports_error_and_cleans_up(tmp_path, video_server):
     assert not bad.ok and "404" in bad.error
     assert bad.path is None
     assert not list(tmp_path.glob("*.part"))
+    from clipfetch.catalog import Catalog
+
+    with Catalog.open(tmp_path) as catalog:
+        assert catalog.get("instagram", "GOOD") is not None
+        assert catalog.get("instagram", "BAD") is None
 
 
 def test_partial_download_resumes_with_range_even_if_index_changed(tmp_path, video_server):

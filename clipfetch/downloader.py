@@ -36,6 +36,7 @@ class DownloadResult:
     size: int
     error: str | None = None
     skipped: bool = False
+    catalog_error: str | None = None
 
     @property
     def ok(self) -> bool:
@@ -120,7 +121,14 @@ class DownloadPool:
             self._progress.finish(index)
             if self._metadata:  # an earlier run without --metadata may lack one
                 write_sidecar(target, clip)
-            return DownloadResult(clip, path=target, size=target.stat().st_size, skipped=True)
+            catalog_error = self._catalog(target, clip)
+            return DownloadResult(
+                clip,
+                path=target,
+                size=target.stat().st_size,
+                skipped=True,
+                catalog_error=catalog_error,
+            )
 
         partial = self._find_partial(clip) or target.with_suffix(".part")
         # A previous run may have assigned a different numeric prefix before
@@ -139,8 +147,19 @@ class DownloadPool:
             return DownloadResult(clip, path=None, size=0, error=str(err))
         if self._metadata:
             write_sidecar(target, clip)
+        catalog_error = self._catalog(target, clip)
         self._progress.finish(index)
-        return DownloadResult(clip, path=target, size=size)
+        return DownloadResult(clip, path=target, size=size, catalog_error=catalog_error)
+
+    def _catalog(self, target: Path, clip: Clip) -> str | None:
+        """Catalog a usable file without turning catalog errors into download errors."""
+        from clipfetch.catalog import CatalogError, record_completed_download
+
+        try:
+            record_completed_download(self._out_dir, target, clip)
+        except (CatalogError, OSError) as err:
+            return str(err)
+        return None
 
     def _find_partial(self, clip: Clip) -> Path | None:
         pattern = f"{self._noun}_*_{safe_ident(clip.ident)}.part"

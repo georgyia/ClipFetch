@@ -95,3 +95,16 @@ def test_main_prints_banner_for_valid_run(capsys, monkeypatch):
     assert main(["-reels", "1"]) == 0
     assert "ClipFetch" in capsys.readouterr().out
     assert len(calls) == 1
+
+
+def test_library_index_cli_reports_counts(tmp_path, capsys):
+    (tmp_path / "reel_001_ABC.mp4").write_bytes(b"video")
+    assert main(["library", "index", str(tmp_path)]) == 0
+    output = capsys.readouterr().out
+    assert "1 scanned" in output
+    assert "1 inserted" in output
+
+
+def test_library_index_missing_directory_is_nonzero(tmp_path, capsys):
+    assert main(["library", "index", str(tmp_path / "missing")]) == 1
+    assert "does not exist" in capsys.readouterr().out

@@ -66,16 +66,43 @@ def download_all(
             console.dim(f"  [{index}/{len(clips)}] {filename} — already have")
             if metadata:  # an earlier run without --metadata may lack one
                 write_sidecar(target, clip)
-            results.append(DownloadResult(clip, target, size, skipped=True))
+            results.append(
+                DownloadResult(
+                    clip,
+                    target,
+                    size,
+                    skipped=True,
+                    catalog_error=_catalog(out_dir, target, clip),
+                )
+            )
             continue
         try:
             body = _fetch(context, clip)
-            target.write_bytes(body)
+            partial = target.with_suffix(".part")
+            partial.write_bytes(body)
+            partial.replace(target)
             if metadata:
                 write_sidecar(target, clip)
             console.dim(f"  [{index}/{len(clips)}] {filename} — {human_size(len(body))}")
-            results.append(DownloadResult(clip, target, len(body)))
+            results.append(
+                DownloadResult(
+                    clip,
+                    target,
+                    len(body),
+                    catalog_error=_catalog(out_dir, target, clip),
+                )
+            )
         except Exception as err:
             console.error(f"  [{index}/{len(clips)}] {filename} — {err}")
             results.append(DownloadResult(clip, None, 0, error=str(err)))
     return results
+
+
+def _catalog(root: Path, target: Path, clip: Clip) -> str | None:
+    from clipfetch.catalog import CatalogError, record_completed_download
+
+    try:
+        record_completed_download(root, target, clip)
+    except (CatalogError, OSError) as err:
+        return str(err)
+    return None

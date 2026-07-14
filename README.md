@@ -23,6 +23,8 @@ ready to watch on a flight, on the train, or anywhere without a connection.
 - **Quality control** — `--quality high|medium|low` chooses the rendition.
 - **Metadata sidecars** — `--metadata` writes the caption, author, like count and post URL
   as a `.json` file next to each downloaded clip.
+- **Portable local catalog** — every completed clip is recorded automatically in
+  `<output>/.clipfetch/catalog.sqlite3` for fast offline library operations.
 - **Self-contained** — no third-party downloader libraries; the extraction and download
   logic is built from scratch on top of a single dependency (Playwright, the browser driver).
 - **Your session, your feed** — uses a dedicated local browser profile you sign in to once;
@@ -66,10 +68,16 @@ clipfetch -reels 25 --import-cookies chrome   # Chrome on macOS/Linux/Windows
 clipfetch -reels 25 --import-cookies safari   # Safari on macOS
 clipfetch watch reels                # play the downloaded folder in sequence
 clipfetch watch reels --shuffle      # …in random order
+clipfetch library index reels        # rebuild/reconcile the portable local catalog
 clipfetch --help                     # all options
 ```
 
 Re-running the same command tops up the folder — reels already downloaded are skipped.
+
+The SQLite catalog stores video paths relative to the output folder, so moving the whole
+folder keeps it portable. If a catalog is deleted, damaged, or temporarily unwritable,
+the downloaded videos remain usable; `clipfetch library index DIR` reconstructs it from
+supported filenames and any JSON sidecars without renaming or changing video files.
 
 Firefox import needs no extra package. Modern Windows Chrome encryption additionally
 requires `pip install "clipfetch[cookies]"`; Safari may require granting the terminal
