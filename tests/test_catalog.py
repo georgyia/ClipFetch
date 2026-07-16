@@ -26,7 +26,7 @@ def test_catalog_creation_reopening_and_unique_upsert(tmp_path):
         likes=42,
     )
     with Catalog.open(tmp_path) as catalog:
-        assert catalog.schema_version == 3
+        assert catalog.schema_version == 4
         assert catalog.upsert_download(clip, video) == "inserted"
         assert catalog.upsert_download(clip, video) == "unchanged"
 
@@ -143,7 +143,7 @@ def test_v1_catalog_migrates_without_losing_existing_metadata(tmp_path):
     connection.close()
 
     with Catalog.open(tmp_path) as catalog:
-        assert catalog.schema_version == 3
+        assert catalog.schema_version == 4
         record = catalog.get("instagram", "OLD")
         assert record is not None
         assert (record.author, record.caption, record.likes) == ("nasa", "space", 42)

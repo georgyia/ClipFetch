@@ -219,3 +219,31 @@ def test_semantic_cli_uses_local_index_and_json_has_no_banner(tmp_path, capsys, 
     value = json.loads(output)
     assert value["matches"][0]["clip"]["id"] == "ABC"
     assert value["matches"][0]["score"] > 0.9
+
+
+def test_topics_cli_init_add_manual_tag_and_filter(tmp_path, capsys):
+    video = tmp_path / "reel_001_ABC.mp4"
+    video.write_bytes(b"video")
+    assert main(["library", "index", str(tmp_path)]) == 0
+    assert main(["topics", "init", str(tmp_path)]) == 0
+    assert main(
+        [
+            "topics",
+            "add",
+            str(tmp_path),
+            "climate-tech",
+            "--description",
+            "clean technology",
+            "--example",
+            "renewable energy",
+        ]
+    ) == 0
+    assert main(
+        ["library", "tag", str(tmp_path), "ABC", "--topic", "climate-tech"]
+    ) == 0
+    capsys.readouterr()
+    assert main(
+        ["library", "list", str(tmp_path), "--topic", "climate-tech", "--json"]
+    ) == 0
+    result = json.loads(capsys.readouterr().out)
+    assert result["matched"] == 1 and result["clips"][0]["id"] == "ABC"

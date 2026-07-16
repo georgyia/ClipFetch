@@ -173,6 +173,60 @@ def _run_watch(args: list[str], console: Console) -> int:
     return watch(parsed.dir, console, shuffle=parsed.shuffle)
 
 
+def _run_topics(args: list[str], console: Console) -> int:
+    from clipfetch.topics import (
+        TopicError,
+        add_topic,
+        init_topics,
+        load_topics,
+        remove_topic,
+    )
+
+    parser = argparse.ArgumentParser(prog="clipfetch topics")
+    commands = parser.add_subparsers(dest="command", required=True)
+    for command in ("init", "list"):
+        child = commands.add_parser(command)
+        child.add_argument("dir", nargs="?", default="reels", type=Path)
+    add_parser = commands.add_parser("add")
+    add_parser.add_argument("values", nargs="+", metavar="[DIR] NAME")
+    add_parser.add_argument("--description", required=True)
+    add_parser.add_argument("--example", action="append", required=True)
+    remove_parser = commands.add_parser("remove")
+    remove_parser.add_argument("values", nargs="+", metavar="[DIR] NAME")
+    try:
+        parsed = parser.parse_args(args)
+    except SystemExit as exit_:
+        return int(exit_.code or 0)
+    try:
+        if parsed.command == "init":
+            config = init_topics(parsed.dir)
+            console.success(f"Initialized {len(config.topics)} topics in {parsed.dir}.")
+            return 0
+        if parsed.command == "list":
+            config = load_topics(parsed.dir)
+            for topic in config.topics:
+                console.print(f"{topic.name}: {topic.description}")
+            console.info(f"{len(config.topics)} topic(s); threshold {config.threshold:.2f}.")
+            return 0
+        if len(parsed.values) == 1:
+            root, name = Path("reels"), parsed.values[0]
+        elif len(parsed.values) == 2:
+            root, name = Path(parsed.values[0]), parsed.values[1]
+        else:
+            console.error(f"topics {parsed.command} expects [DIR] NAME")
+            return 2
+        if parsed.command == "add":
+            topic = add_topic(root, name, parsed.description, parsed.example)
+            console.success(f"Added topic {topic.name}.")
+        else:
+            remove_topic(root, name)
+            console.success(f"Removed topic {name}.")
+        return 0
+    except TopicError as err:
+        console.error(str(err))
+        return 1
+
+
 def _run_library(args: list[str], console: Console) -> int:
     """Dispatch catalog maintenance commands without importing browser code."""
     from clipfetch.catalog import CatalogError, index_library
@@ -186,6 +240,7 @@ def _run_library(args: list[str], console: Console) -> int:
         record_to_dict,
     )
     from clipfetch.semantic import SemanticError
+    from clipfetch.topics import TopicError
 
     def magnitude(value: str) -> int:
         try:
@@ -214,6 +269,7 @@ def _run_library(args: list[str], console: Console) -> int:
     list_parser.add_argument("--author", action="append", default=[])
     list_parser.add_argument("--hashtag", action="append", default=[])
     list_parser.add_argument("--platform", action="append", default=[])
+    list_parser.add_argument("--topic", action="append", default=[])
     list_parser.add_argument("--downloaded-after", type=date_value)
     list_parser.add_argument("--downloaded-before", type=date_value)
     list_parser.add_argument(
@@ -239,10 +295,19 @@ def _run_library(args: list[str], console: Console) -> int:
     search_parser.add_argument("--author", action="append", default=[])
     search_parser.add_argument("--hashtag", action="append", default=[])
     search_parser.add_argument("--platform", action="append", default=[])
+    search_parser.add_argument("--topic", action="append", default=[])
     search_parser.add_argument("--downloaded-after", type=date_value)
     search_parser.add_argument("--downloaded-before", type=date_value)
     search_parser.add_argument("--limit", type=_positive_int, default=20)
     search_parser.add_argument("--json", action="store_true")
+    categorize_parser = commands.add_parser(
+        "categorize", help="assign local user-defined topics to clips"
+    )
+    categorize_parser.add_argument("dir", nargs="?", default="reels", type=Path)
+    tag_parser = commands.add_parser("tag", help="manually add/remove a clip topic")
+    tag_parser.add_argument("values", nargs="+", metavar="[DIR] CLIP_ID")
+    tag_parser.add_argument("--topic", required=True)
+    tag_parser.add_argument("--remove", action="store_true")
     try:
         parsed = parser.parse_args(args)
     except SystemExit as exit_:
@@ -267,6 +332,7 @@ def _run_library(args: list[str], console: Console) -> int:
                 authors=tuple(parsed.author),
                 hashtags=tuple(parsed.hashtag),
                 platforms=tuple(parsed.platform),
+                topics=tuple(parsed.topic),
                 downloaded_after=parsed.downloaded_after,
                 downloaded_before=parsed.downloaded_before,
             )
@@ -332,6 +398,7 @@ def _run_library(args: list[str], console: Console) -> int:
                 authors=tuple(parsed.author),
                 hashtags=tuple(parsed.hashtag),
                 platforms=tuple(parsed.platform),
+                topics=tuple(parsed.topic),
                 downloaded_after=parsed.downloaded_after,
                 downloaded_before=parsed.downloaded_before,
             )
@@ -365,6 +432,31 @@ def _run_library(args: list[str], console: Console) -> int:
                     "were not indexed."
                 )
             return 0
+        if parsed.command == "categorize":
+            from clipfetch.semantic import FastEmbedder
+            from clipfetch.topics import categorize_library
+
+            category_report = categorize_library(parsed.dir, FastEmbedder())
+            console.success(
+                f"Categorized {category_report.categorized} clip(s); "
+                f"{category_report.unchanged} unchanged, "
+                f"{category_report.uncategorized} uncategorized."
+            )
+            return 0
+        if parsed.command == "tag":
+            from clipfetch.topics import tag_clip
+
+            if len(parsed.values) == 1:
+                root, clip_id = Path("reels"), parsed.values[0]
+            elif len(parsed.values) == 2:
+                root, clip_id = Path(parsed.values[0]), parsed.values[1]
+            else:
+                console.error("library tag expects [DIR] CLIP_ID")
+                return 2
+            tag_clip(root, clip_id, parsed.topic, remove=parsed.remove)
+            verb = "Removed" if parsed.remove else "Assigned"
+            console.success(f"{verb} topic {parsed.topic} for {clip_id}.")
+            return 0
         if len(parsed.values) == 1:
             root, clip_id = Path("reels"), parsed.values[0]
         elif len(parsed.values) == 2:
@@ -374,13 +466,20 @@ def _run_library(args: list[str], console: Console) -> int:
             return 2
         record = find_clip(root, clip_id)
         value = record_to_dict(record)
+        from clipfetch.topics import assignment_details, topics_path
+
+        value["topics"] = (
+            assignment_details(root, record.platform, record.clip_id)
+            if topics_path(root).exists()
+            else []
+        )
         if parsed.json:
             console.print(json.dumps(value, ensure_ascii=False, indent=2))
         else:
             for key, item in value.items():
                 console.print(f"{key.replace('_', ' ').title()}: {item}")
         return 0
-    except (CatalogError, SemanticError) as err:
+    except (CatalogError, SemanticError, TopicError) as err:
         console.error(str(err))
         return 1
 
@@ -419,6 +518,11 @@ def main(argv: list[str] | None = None) -> int:
         if "--json" not in args and not any(value in args for value in ("-h", "--help")):
             console.banner(__version__)
         return _run_library(args[1:], console)
+
+    if args and args[0] == "topics":
+        if not any(value in args for value in ("-h", "--help")):
+            console.banner(__version__)
+        return _run_topics(args[1:], console)
 
     try:
         opts = parse_args(args)

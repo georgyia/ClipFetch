@@ -15,7 +15,7 @@ from clipfetch.model import Clip, ClipMetadata
 
 CATALOG_DIR = ".clipfetch"
 CATALOG_NAME = "catalog.sqlite3"
-CURRENT_SCHEMA_VERSION = 3
+CURRENT_SCHEMA_VERSION = 4
 
 _VIDEO_NAME = re.compile(r"^(reel|tiktok|short)_\d+_(.+)\.mp4$")
 _PLATFORM_FOR_NOUN = {"reel": "instagram", "tiktok": "tiktok", "short": "youtube"}
@@ -72,6 +72,21 @@ class EmbeddingRecord:
     input_hash: str
     dimension: int
     vector: bytes
+    generated_at: str
+
+
+@dataclass(frozen=True)
+class TopicAssignment:
+    platform: str
+    clip_id: str
+    topic: str
+    confidence: float
+    provenance: str
+    model_id: str | None
+    model_revision: str | None
+    definition_hash: str | None
+    input_hash: str | None
+    threshold: float | None
     generated_at: str
 
 
@@ -137,10 +152,35 @@ def _migration_3(connection: sqlite3.Connection) -> None:
     )
 
 
+def _migration_4(connection: sqlite3.Connection) -> None:
+    connection.execute(
+        """
+        CREATE TABLE topic_assignments (
+            platform TEXT NOT NULL,
+            clip_id TEXT NOT NULL,
+            topic TEXT NOT NULL,
+            confidence REAL NOT NULL,
+            provenance TEXT NOT NULL,
+            model_id TEXT,
+            model_revision TEXT,
+            definition_hash TEXT,
+            input_hash TEXT,
+            threshold REAL,
+            generated_at TEXT NOT NULL,
+            PRIMARY KEY (platform, clip_id, topic, provenance),
+            FOREIGN KEY (platform, clip_id) REFERENCES clips(platform, clip_id)
+                ON DELETE CASCADE
+        )
+        """
+    )
+    connection.execute("CREATE INDEX topic_name_idx ON topic_assignments(topic)")
+
+
 MIGRATIONS: dict[int, Migration] = {
     1: _migration_1,
     2: _migration_2,
     3: _migration_3,
+    4: _migration_4,
 }
 
 
@@ -377,6 +417,84 @@ class Catalog:
                 (platform, clip_id, model_id, model_revision),
             )
 
+    def topic_assignments(
+        self, platform: str | None = None, clip_id: str | None = None
+    ) -> list[TopicAssignment]:
+        sql = "SELECT * FROM topic_assignments"
+        values: tuple[str, ...] = ()
+        if platform is not None and clip_id is not None:
+            sql += " WHERE platform = ? AND clip_id = ?"
+            values = (platform, clip_id)
+        sql += " ORDER BY platform, clip_id, provenance DESC, confidence DESC, topic"
+        rows = self._connection.execute(sql, values).fetchall()
+        return [_topic_from_row(row) for row in rows]
+
+    def topic_names(self, platform: str, clip_id: str) -> tuple[str, ...]:
+        assignments = self.topic_assignments(platform, clip_id)
+        manual = {item.topic for item in assignments if item.provenance == "manual"}
+        generated = {
+            item.topic
+            for item in assignments
+            if item.provenance == "model" and item.topic != "uncategorized"
+        }
+        return tuple(sorted(manual | generated))
+
+    def replace_model_topics(
+        self, platform: str, clip_id: str, assignments: list[TopicAssignment]
+    ) -> None:
+        with self._lock, self._connection:
+            self._connection.execute(
+                "DELETE FROM topic_assignments "
+                "WHERE platform = ? AND clip_id = ? AND provenance = 'model'",
+                (platform, clip_id),
+            )
+            self._connection.executemany(
+                """
+                INSERT INTO topic_assignments VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                [
+                    (
+                        item.platform,
+                        item.clip_id,
+                        item.topic,
+                        item.confidence,
+                        item.provenance,
+                        item.model_id,
+                        item.model_revision,
+                        item.definition_hash,
+                        item.input_hash,
+                        item.threshold,
+                        item.generated_at,
+                    )
+                    for item in assignments
+                ],
+            )
+
+    def set_manual_topic(self, platform: str, clip_id: str, topic: str) -> None:
+        now = datetime.now(timezone.utc).isoformat()
+        with self._lock, self._connection:
+            self._connection.execute(
+                """
+                INSERT INTO topic_assignments VALUES (?, ?, ?, 1.0, 'manual',
+                    NULL, NULL, NULL, NULL, NULL, ?)
+                ON CONFLICT(platform, clip_id, topic, provenance) DO UPDATE SET
+                    confidence = 1.0, generated_at = excluded.generated_at
+                """,
+                (platform, clip_id, topic, now),
+            )
+
+    def remove_manual_topic(self, platform: str, clip_id: str, topic: str) -> None:
+        with self._lock, self._connection:
+            self._connection.execute(
+                "DELETE FROM topic_assignments WHERE platform = ? AND clip_id = ? "
+                "AND topic = ? AND provenance = 'manual'",
+                (platform, clip_id, topic),
+            )
+
+    def remove_topic(self, topic: str) -> None:
+        with self._lock, self._connection:
+            self._connection.execute("DELETE FROM topic_assignments WHERE topic = ?", (topic,))
+
 
 def _migrate(connection: sqlite3.Connection) -> None:
     """Apply forward-only migrations atomically."""
@@ -521,5 +639,21 @@ def _embedding_from_row(row: sqlite3.Row) -> EmbeddingRecord:
         input_hash=row["input_hash"],
         dimension=row["dimension"],
         vector=row["vector"],
+        generated_at=row["generated_at"],
+    )
+
+
+def _topic_from_row(row: sqlite3.Row) -> TopicAssignment:
+    return TopicAssignment(
+        platform=row["platform"],
+        clip_id=row["clip_id"],
+        topic=row["topic"],
+        confidence=row["confidence"],
+        provenance=row["provenance"],
+        model_id=row["model_id"],
+        model_revision=row["model_revision"],
+        definition_hash=row["definition_hash"],
+        input_hash=row["input_hash"],
+        threshold=row["threshold"],
         generated_at=row["generated_at"],
     )

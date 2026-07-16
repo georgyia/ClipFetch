@@ -76,6 +76,12 @@ pip install "clipfetch[semantic]"    # optional; Python 3.10+
 clipfetch library semantic-index reels
 clipfetch library search reels "entrepreneurship and startup advice"
 clipfetch library search reels "emprendimiento" --min-likes 1m
+clipfetch topics init reels
+clipfetch topics add reels climate-tech --description "climate technology" \
+  --example "clean energy startup"
+clipfetch library categorize reels
+clipfetch library list reels --topic entrepreneurship
+clipfetch library tag reels ABC123 --topic entrepreneurship
 clipfetch --help                     # all options
 ```
 
@@ -113,6 +119,13 @@ Semantic similarity is approximate: short or missing captions, slang, and langua
 less model coverage can reduce result quality. Combine search with metadata filters when
 precision matters. See [the reproducible CPU benchmark](docs/semantic-benchmark.md) for
 the 100/1,000/10,000-caption timing and peak-memory procedure.
+
+Topic definitions are library-scoped in `.clipfetch/topics.json`. `topics init` installs
+starter categories for entrepreneurship, business, finance, technology, marketing,
+education, health and fitness, food, travel, entertainment, and news. Definitions are
+editable through the CLI without retraining a model. Categorization is local, multilingual,
+multi-label, and stores relevance estimates—not factual claims. Manual tags override model
+assignments and survive re-categorization until removed with `library tag ... --remove`.
 
 Firefox import needs no extra package. Modern Windows Chrome encryption additionally
 requires `pip install "clipfetch[cookies]"`; Safari may require granting the terminal

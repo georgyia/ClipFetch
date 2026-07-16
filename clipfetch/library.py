@@ -26,6 +26,7 @@ class ClipFilter:
     authors: tuple[str, ...] = ()
     hashtags: tuple[str, ...] = ()
     platforms: tuple[str, ...] = ()
+    topics: tuple[str, ...] = ()
     downloaded_after: date | None = None
     downloaded_before: date | None = None
 
@@ -78,10 +79,18 @@ def query_library(
         raise CatalogError(f"library directory does not exist: {root.resolve()}")
     with Catalog.open(root) as catalog:
         records = [_refresh_presence(root, record) for record in catalog.all()]
+        assigned_topics = {
+            (record.platform, record.clip_id): catalog.topic_names(
+                record.platform, record.clip_id
+            )
+            for record in records
+        }
     matched: list[CatalogRecord] = []
     unknown_count = 0
     for record in records:
-        is_match, unknown = matches_filter(record, filters)
+        is_match, unknown = matches_filter(
+            record, filters, assigned_topics.get((record.platform, record.clip_id), ())
+        )
         if is_match:
             matched.append(record)
         else:
@@ -97,7 +106,11 @@ def query_library(
     )
 
 
-def matches_filter(record: CatalogRecord, filters: ClipFilter) -> tuple[bool, bool]:
+def matches_filter(
+    record: CatalogRecord,
+    filters: ClipFilter,
+    assigned_topics: tuple[str, ...] = (),
+) -> tuple[bool, bool]:
     """Return ``(matches, excluded_because_required_value_unknown)``."""
     if not record.available:
         return False, False
@@ -129,6 +142,10 @@ def matches_filter(record: CatalogRecord, filters: ClipFilter) -> tuple[bool, bo
         platform.casefold() for platform in filters.platforms
     }:
         return False, unknown
+    if filters.topics:
+        wanted_topics = {topic.casefold() for topic in filters.topics}
+        if not wanted_topics.intersection(topic.casefold() for topic in assigned_topics):
+            return False, unknown
 
     if filters.downloaded_after is not None or filters.downloaded_before is not None:
         downloaded = _record_date(record)
