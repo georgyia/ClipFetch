@@ -91,6 +91,8 @@ clipfetch -reels 25 --min-likes 1m --topic entrepreneurship --scan-limit 250
 pip install "clipfetch[transcribe]"  # optional local speech enrichment
 clipfetch library enrich transcript reels
 clipfetch library enrich transcript reels --topic entrepreneurship --model base
+clipfetch library enrich comments reels --max-comments 20 --min-likes 1m
+clipfetch library purge-comments reels
 clipfetch --help                     # all options
 ```
 
@@ -118,7 +120,8 @@ about 220 MB into `~/.cache/clipfetch/fastembed`; after that, indexing and searc
 offline. The base installation stays Playwright-only, and metadata commands never import
 or require FastEmbed. FastEmbed currently requires Python 3.10 or newer.
 
-Semantic documents contain only the locally stored caption and normalized hashtags.
+Semantic documents contain labeled fields for the locally stored caption, normalized
+hashtags, and any explicitly generated transcript or retained comment text.
 Inference runs in-process: captions, queries, and vectors are never sent to an inference
 API. Normalized float32 vectors live in the same local SQLite catalog with the model id,
 pinned integration revision, input hash, and generation time. Re-indexing is incremental
@@ -161,6 +164,25 @@ each file independently, and distinguish completed, silent, unsupported, skipped
 files. Transcript changes invalidate only affected semantic vectors and generated topics;
 manual topic corrections remain intact. Re-run `library semantic-index` and then
 `library categorize` to rebuild only the invalidated generated data.
+
+### Opt-in Instagram comments
+
+`library enrich comments` is the only workflow that requests comments. It filters the local
+catalog before opening the authenticated browser, fetches top-level comments at no more than
+one request per second, and retains at most 20 per clip by default (100 hard maximum). Normal
+downloads, indexing, search, and categorization never request comments.
+
+Storage is deliberately minimal: normalized comment text, platform comment id, source clip,
+and retrieval time. Usernames, profile/user ids, avatars, profile URLs, likes, and raw
+responses are discarded. Exact duplicate/empty text is removed and retained semantic text
+is capped at 4,000 characters per clip. Deleted, disabled, unavailable, authentication,
+rate-limit, and failure outcomes are tracked independently so runs can resume safely.
+
+Fetching comments creates extra Instagram requests and handles volatile user-generated data.
+Use it only where permitted by Instagram's terms and your local privacy obligations. Run
+`library purge-comments DIR` to remove all stored comment ids/text and invalidate affected
+generated analysis; manual topics remain. Re-run `library semantic-index` and `library
+categorize` afterward to rebuild without comments.
 
 Firefox import needs no extra package. Modern Windows Chrome encryption additionally
 requires `pip install "clipfetch[cookies]"`; Safari may require granting the terminal

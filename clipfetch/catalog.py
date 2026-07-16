@@ -15,7 +15,7 @@ from clipfetch.model import Clip, ClipMetadata
 
 CATALOG_DIR = ".clipfetch"
 CATALOG_NAME = "catalog.sqlite3"
-CURRENT_SCHEMA_VERSION = 5
+CURRENT_SCHEMA_VERSION = 6
 
 _VIDEO_NAME = re.compile(r"^(reel|tiktok|short)_\d+_(.+)\.mp4$")
 _PLATFORM_FOR_NOUN = {"reel": "instagram", "tiktok": "tiktok", "short": "youtube"}
@@ -68,6 +68,21 @@ class CatalogRecord:
     transcript_status: str | None = None
     transcript_error: str | None = None
     transcript_updated_at: str | None = None
+    comment_text: str | None = None
+    comment_status: str | None = None
+    comment_retrieved_at: str | None = None
+    comment_error: str | None = None
+
+
+@dataclass(frozen=True)
+class CatalogComment:
+    """One retained comment without commenter identity or profile metadata."""
+
+    platform: str
+    clip_id: str
+    comment_id: str
+    text: str
+    retrieved_at: str
 
 
 @dataclass(frozen=True)
@@ -200,12 +215,37 @@ def _migration_5(connection: sqlite3.Connection) -> None:
         connection.execute(f"ALTER TABLE clips ADD COLUMN {definition}")
 
 
+def _migration_6(connection: sqlite3.Connection) -> None:
+    for definition in (
+        "comment_text TEXT",
+        "comment_status TEXT",
+        "comment_retrieved_at TEXT",
+        "comment_error TEXT",
+    ):
+        connection.execute(f"ALTER TABLE clips ADD COLUMN {definition}")
+    connection.execute(
+        """
+        CREATE TABLE clip_comments (
+            platform TEXT NOT NULL,
+            clip_id TEXT NOT NULL,
+            comment_id TEXT NOT NULL,
+            text TEXT NOT NULL,
+            retrieved_at TEXT NOT NULL,
+            PRIMARY KEY (platform, clip_id, comment_id),
+            FOREIGN KEY (platform, clip_id) REFERENCES clips(platform, clip_id)
+                ON DELETE CASCADE
+        )
+        """
+    )
+
+
 MIGRATIONS: dict[int, Migration] = {
     1: _migration_1,
     2: _migration_2,
     3: _migration_3,
     4: _migration_4,
     5: _migration_5,
+    6: _migration_6,
 }
 
 
@@ -319,6 +359,14 @@ class Catalog:
                 transcript_status=existing.transcript_status,
                 transcript_error=existing.transcript_error,
                 transcript_updated_at=existing.transcript_updated_at,
+            )
+        if existing and record.comment_status is None:
+            record = replace(
+                record,
+                comment_text=existing.comment_text,
+                comment_status=existing.comment_status,
+                comment_retrieved_at=existing.comment_retrieved_at,
+                comment_error=existing.comment_error,
             )
         if existing == record:
             return "unchanged"
@@ -573,17 +621,111 @@ class Catalog:
                 ),
             )
             if previous["transcript_text"] != text:
-                self._connection.execute(
-                    "DELETE FROM semantic_embeddings WHERE platform = ? AND clip_id = ?",
-                    (platform, clip_id),
-                )
-                self._connection.execute(
-                    "DELETE FROM topic_assignments "
-                    "WHERE platform = ? AND clip_id = ? AND provenance = 'model'",
-                    (platform, clip_id),
-                )
+                self._invalidate_generated(platform, clip_id)
         if cursor.rowcount != 1:  # Defensive: the row is selected under the same write lock.
             raise CatalogError(f"clip id not found for transcript: {clip_id}")
+
+    def comments_for(self, platform: str, clip_id: str) -> list[CatalogComment]:
+        rows = self._connection.execute(
+            "SELECT * FROM clip_comments WHERE platform = ? AND clip_id = ? "
+            "ORDER BY rowid",
+            (platform, clip_id),
+        ).fetchall()
+        return [
+            CatalogComment(
+                row["platform"],
+                row["clip_id"],
+                row["comment_id"],
+                row["text"],
+                row["retrieved_at"],
+            )
+            for row in rows
+        ]
+
+    def set_comments(
+        self,
+        platform: str,
+        clip_id: str,
+        comments: list[tuple[str, str]],
+        *,
+        status: str,
+        error: str | None = None,
+    ) -> None:
+        """Replace one clip's minimal comments and invalidate changed generated data."""
+        retrieved_at = datetime.now(timezone.utc).isoformat()
+        text = "\n".join(item_text for _, item_text in comments) or None
+        with self._lock, self._connection:
+            previous = self._connection.execute(
+                "SELECT comment_text FROM clips WHERE platform = ? AND clip_id = ?",
+                (platform, clip_id),
+            ).fetchone()
+            if previous is None:
+                raise CatalogError(f"clip id not found for comments: {clip_id}")
+            self._connection.execute(
+                "DELETE FROM clip_comments WHERE platform = ? AND clip_id = ?",
+                (platform, clip_id),
+            )
+            self._connection.executemany(
+                "INSERT INTO clip_comments VALUES (?, ?, ?, ?, ?)",
+                [
+                    (platform, clip_id, comment_id, item_text, retrieved_at)
+                    for comment_id, item_text in comments
+                ],
+            )
+            self._connection.execute(
+                "UPDATE clips SET comment_text = ?, comment_status = ?, "
+                "comment_retrieved_at = ?, comment_error = ? "
+                "WHERE platform = ? AND clip_id = ?",
+                (text, status, retrieved_at, error, platform, clip_id),
+            )
+            if previous["comment_text"] != text:
+                self._invalidate_generated(platform, clip_id)
+
+    def set_comment_status(
+        self,
+        platform: str,
+        clip_id: str,
+        status: str,
+        error: str | None = None,
+    ) -> None:
+        """Record a retryable outcome without discarding previously retained comments."""
+        with self._lock, self._connection:
+            cursor = self._connection.execute(
+                "UPDATE clips SET comment_status = ?, comment_error = ? "
+                "WHERE platform = ? AND clip_id = ?",
+                (status, error, platform, clip_id),
+            )
+        if cursor.rowcount != 1:
+            raise CatalogError(f"clip id not found for comments: {clip_id}")
+
+    def purge_comments(self) -> int:
+        """Remove all comment enrichment and invalidate only affected generated data."""
+        with self._lock, self._connection:
+            rows = self._connection.execute(
+                "SELECT platform, clip_id, comment_text FROM clips "
+                "WHERE comment_status IS NOT NULL OR comment_text IS NOT NULL"
+            ).fetchall()
+            self._connection.execute("DELETE FROM clip_comments")
+            self._connection.execute(
+                "UPDATE clips SET comment_text = NULL, comment_status = NULL, "
+                "comment_retrieved_at = NULL, comment_error = NULL"
+            )
+            for row in rows:
+                if row["comment_text"] is not None:
+                    self._invalidate_generated(row["platform"], row["clip_id"])
+        return len(rows)
+
+    def _invalidate_generated(self, platform: str, clip_id: str) -> None:
+        """Delete derived data while the caller holds the catalog write lock."""
+        self._connection.execute(
+            "DELETE FROM semantic_embeddings WHERE platform = ? AND clip_id = ?",
+            (platform, clip_id),
+        )
+        self._connection.execute(
+            "DELETE FROM topic_assignments "
+            "WHERE platform = ? AND clip_id = ? AND provenance = 'model'",
+            (platform, clip_id),
+        )
 
 
 def _migrate(connection: sqlite3.Connection) -> None:
@@ -726,6 +868,10 @@ def _record_from_row(row: sqlite3.Row) -> CatalogRecord:
         transcript_status=row["transcript_status"],
         transcript_error=row["transcript_error"],
         transcript_updated_at=row["transcript_updated_at"],
+        comment_text=row["comment_text"],
+        comment_status=row["comment_status"],
+        comment_retrieved_at=row["comment_retrieved_at"],
+        comment_error=row["comment_error"],
     )
 
 

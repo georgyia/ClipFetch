@@ -1,4 +1,5 @@
 import json
+from contextlib import contextmanager
 from pathlib import Path
 
 import pytest
@@ -336,3 +337,69 @@ def test_transcript_enrichment_cli_with_fake_backend(tmp_path, capsys, monkeypat
     assert "1 completed" in capsys.readouterr().out
     with Catalog.open(tmp_path) as catalog:
         assert catalog.get("instagram", "ABC").transcript_text == "spoken startup advice"
+
+
+def test_comment_enrichment_and_purge_cli_with_fake_browser(tmp_path, capsys, monkeypatch):
+    video = tmp_path / "reel_001_ABC.mp4"
+    video.write_bytes(b"video")
+    video.with_suffix(".json").write_text(
+        json.dumps({"platform": "instagram", "id": "ABC", "likes": 10}),
+        encoding="utf-8",
+    )
+    assert main(["library", "index", str(tmp_path)]) == 0
+
+    from clipfetch import comments, session
+
+    events = []
+    original_select = comments.select_comment_records
+    original_limiter = comments.RequestLimiter
+
+    def tracked_select(root, filters):
+        events.append("select")
+        return original_select(root, filters)
+
+    @contextmanager
+    def fake_session(*args, **kwargs):
+        events.append("session")
+        yield object()
+
+    class FakeBackend:
+        def __init__(self, context):
+            pass
+
+        def resolve_media_id(self, record):
+            return "99"
+
+        def fetch_page(self, media_id, cursor, limit):
+            return comments.CommentPage((comments.CommentItem("1", "useful context"),))
+
+    monkeypatch.setattr(comments, "select_comment_records", tracked_select)
+    monkeypatch.setattr(comments, "InstagramCommentBackend", FakeBackend)
+    monkeypatch.setattr(
+        comments,
+        "RequestLimiter",
+        lambda: original_limiter(interval=0),
+    )
+    monkeypatch.setattr(session, "platform_session", fake_session)
+    capsys.readouterr()
+    assert main(
+        [
+            "library",
+            "enrich",
+            "comments",
+            str(tmp_path),
+            "--max-comments",
+            "1",
+            "--min-likes",
+            "5",
+        ]
+    ) == 0
+    assert events == ["select", "session"]
+    assert "1 completed" in capsys.readouterr().out
+    with Catalog.open(tmp_path) as catalog:
+        assert catalog.get("instagram", "ABC").comment_text == "useful context"
+
+    assert main(["library", "purge-comments", str(tmp_path)]) == 0
+    assert "1 clip(s)" in capsys.readouterr().out
+    with Catalog.open(tmp_path) as catalog:
+        assert catalog.get("instagram", "ABC").comment_text is None

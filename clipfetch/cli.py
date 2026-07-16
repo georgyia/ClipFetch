@@ -323,6 +323,7 @@ def _run_library(args: list[str], console: Console) -> int:
     """Dispatch catalog maintenance commands without importing browser code."""
     from clipfetch.catalog import CatalogError, index_library
     from clipfetch.collections import CollectionError
+    from clipfetch.comments import CommentsError
     from clipfetch.library import (
         ClipFilter,
         find_clip,
@@ -440,6 +441,25 @@ def _run_library(args: list[str], console: Console) -> int:
     transcript_parser.add_argument("--topic", action="append", default=[])
     transcript_parser.add_argument("--downloaded-after", type=date_value)
     transcript_parser.add_argument("--downloaded-before", type=date_value)
+    comments_parser = enrich_commands.add_parser("comments")
+    comments_parser.add_argument("dir", nargs="?", default="reels", type=Path)
+    comments_parser.add_argument("--max-comments", type=_positive_int, default=20)
+    comments_parser.add_argument("--force", action="store_true")
+    comments_parser.add_argument("--headed", action="store_true")
+    comments_parser.add_argument("--min-likes", type=magnitude)
+    comments_parser.add_argument("--max-likes", type=magnitude)
+    comments_parser.add_argument("--min-views", type=magnitude)
+    comments_parser.add_argument("--max-views", type=magnitude)
+    comments_parser.add_argument("--author", action="append", default=[])
+    comments_parser.add_argument("--hashtag", action="append", default=[])
+    comments_parser.add_argument("--platform", action="append", default=[])
+    comments_parser.add_argument("--topic", action="append", default=[])
+    comments_parser.add_argument("--downloaded-after", type=date_value)
+    comments_parser.add_argument("--downloaded-before", type=date_value)
+    purge_comments_parser = commands.add_parser(
+        "purge-comments", help="remove all locally retained comment enrichment"
+    )
+    purge_comments_parser.add_argument("dir", nargs="?", default="reels", type=Path)
     try:
         parsed = parser.parse_args(args)
     except SystemExit as exit_:
@@ -648,12 +668,6 @@ def _run_library(args: list[str], console: Console) -> int:
                 console.stream.flush()
             return 0
         if parsed.command == "enrich":
-            from clipfetch.transcription import (
-                DEFAULT_TRANSCRIPT_CACHE,
-                FasterWhisperTranscriber,
-                enrich_transcripts,
-            )
-
             filters = ClipFilter(
                 min_likes=parsed.min_likes,
                 max_likes=parsed.max_likes,
@@ -666,6 +680,60 @@ def _run_library(args: list[str], console: Console) -> int:
                 downloaded_after=parsed.downloaded_after,
                 downloaded_before=parsed.downloaded_before,
             )
+            if parsed.enrich_command == "comments":
+                from clipfetch import session
+                from clipfetch.comments import (
+                    HARD_MAX_COMMENTS,
+                    InstagramCommentBackend,
+                    enrich_comments,
+                    select_comment_records,
+                )
+                from clipfetch.platforms import BY_KEY
+
+                if parsed.max_comments > HARD_MAX_COMMENTS:
+                    raise CommentsError(
+                        f"max comments must be between 1 and {HARD_MAX_COMMENTS}"
+                    )
+                records = select_comment_records(parsed.dir, filters)
+                if not records:
+                    console.info("No local Instagram clips matched the requested filters.")
+                    return 0
+                console.info(
+                    "Comment enrichment makes authenticated Instagram requests at no more "
+                    "than one request per second; only comment ids and text are retained."
+                )
+
+                def comment_progress(index, total, status, record) -> None:
+                    console.dim(f"  [{index}/{total}] {record.clip_id}: {status}")
+
+                with session.platform_session(
+                    BY_KEY["instagram"], console, headed=parsed.headed
+                ) as context:
+                    comment_report = enrich_comments(
+                        parsed.dir,
+                        InstagramCommentBackend(context),
+                        records,
+                        max_comments=parsed.max_comments,
+                        force=parsed.force,
+                        on_progress=comment_progress,
+                    )
+                console.success(
+                    f"Comments: {comment_report.completed} completed, "
+                    f"{comment_report.skipped} skipped, {comment_report.empty} empty, "
+                    f"{comment_report.disabled} disabled, "
+                    f"{comment_report.deleted} deleted, "
+                    f"{comment_report.unavailable} unavailable, "
+                    f"{comment_report.authentication_checkpoint} authentication checkpoint, "
+                    f"{comment_report.rate_limited} rate-limited, "
+                    f"{comment_report.failed} failed."
+                )
+                return 0
+            from clipfetch.transcription import (
+                DEFAULT_TRANSCRIPT_CACHE,
+                FasterWhisperTranscriber,
+                enrich_transcripts,
+            )
+
             if not DEFAULT_TRANSCRIPT_CACHE.exists():
                 console.info(
                     f"First use downloads the {parsed.model!r} transcription model to "
@@ -676,7 +744,7 @@ def _run_library(args: list[str], console: Console) -> int:
             def transcript_progress(index, total, status, record) -> None:
                 console.dim(f"  [{index}/{total}] {record.clip_id}: {status}")
 
-            report = enrich_transcripts(
+            transcript_report = enrich_transcripts(
                 parsed.dir,
                 transcriber,
                 filters,
@@ -684,10 +752,18 @@ def _run_library(args: list[str], console: Console) -> int:
                 on_progress=transcript_progress,
             )
             console.success(
-                f"Transcripts: {report.completed} completed, {report.skipped} skipped, "
-                f"{report.silent} silent, {report.unsupported} unsupported, "
-                f"{report.failed} failed."
+                f"Transcripts: {transcript_report.completed} completed, "
+                f"{transcript_report.skipped} skipped, "
+                f"{transcript_report.silent} silent, "
+                f"{transcript_report.unsupported} unsupported, "
+                f"{transcript_report.failed} failed."
             )
+            return 0
+        if parsed.command == "purge-comments":
+            from clipfetch.comments import purge_comments
+
+            purged = purge_comments(parsed.dir)
+            console.success(f"Purged comment enrichment from {purged} clip(s).")
             return 0
         if len(parsed.values) == 1:
             root, clip_id = Path("reels"), parsed.values[0]
@@ -714,6 +790,7 @@ def _run_library(args: list[str], console: Console) -> int:
     except (
         CatalogError,
         CollectionError,
+        CommentsError,
         SemanticError,
         TopicError,
         TranscriptionError,
