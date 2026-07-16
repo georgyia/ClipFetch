@@ -165,9 +165,12 @@ class _FakePermalinkPage:
         self.context = context
         self.closed = False
 
-    def goto(self, url, wait_until, timeout):
-        assert wait_until == "commit"
+    def evaluate(self, script, url):
+        assert "location.assign" in script
         self.context.started.append(url.split("/reel/", 1)[1].split("/", 1)[0])
+
+    def goto(self, url, wait_until, timeout):
+        raise AssertionError("the compatibility fallback should not be needed")
 
     def wait_for_timeout(self, _milliseconds):
         # Resolution only becomes possible after every navigation was started.
@@ -200,4 +203,27 @@ def test_permalink_batch_starts_all_tabs_before_waiting():
     assert context.started == ["AAA", "BBB", "CCC"]
     assert context.wait_started_counts == [3]
     assert list(clips) == ["AAA", "BBB", "CCC"]
+    assert all(page.closed for page in context.pages)
+
+
+def test_permalink_navigation_falls_back_to_commit_goto():
+    class FallbackPage(_FakePermalinkPage):
+        def evaluate(self, script, url):
+            raise RuntimeError("location assignment unavailable")
+
+        def goto(self, url, wait_until, timeout):
+            assert wait_until == "commit" and timeout == 8000
+            self.context.started.append(url.split("/reel/", 1)[1].split("/", 1)[0])
+
+    class FallbackContext(_FakePermalinkContext):
+        def new_page(self):
+            page = FallbackPage(self)
+            self.pages.append(page)
+            return page
+
+    clips = {}
+    context = FallbackContext(clips)
+    instagram._resolve_permalinks(context, ["AAA", "BBB"], clips)
+    assert context.started == ["AAA", "BBB"]
+    assert list(clips) == ["AAA", "BBB"]
     assert all(page.closed for page in context.pages)

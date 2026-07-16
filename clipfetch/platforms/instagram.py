@@ -122,21 +122,26 @@ class Instagram(Platform):
     def _resolve_permalinks(self, context, codes, clips_by_code) -> None:
         """Resolve one bounded batch of reel permalinks concurrently.
 
-        ``goto(..., wait_until='commit')`` returns as soon as each navigation
-        starts. The pages then load their JSON/media responses in parallel;
-        the context-wide response listener populates ``clips_by_code``.
+        Assigning ``location`` returns before a response arrives, so every tab's
+        request is scheduled before we enter the event-pumping wait. A regular
+        ``goto(..., wait_until='commit')`` remains as a browser compatibility
+        fallback. The context-wide response listener populates ``clips_by_code``.
         """
         pages = [context.new_page() for _ in codes]
         try:
             for page, code in zip(pages, codes):
+                url = f"{_HOME}reel/{code}/"
                 try:
-                    page.goto(
-                        f"{_HOME}reel/{code}/",
-                        wait_until="commit",
-                        timeout=_PERMALINK_TIMEOUT_MS,
-                    )
+                    page.evaluate("url => window.location.assign(url)", url)
                 except Exception:
-                    continue
+                    try:
+                        page.goto(
+                            url,
+                            wait_until="commit",
+                            timeout=_PERMALINK_TIMEOUT_MS,
+                        )
+                    except Exception:
+                        continue
             deadline = time.monotonic() + _PERMALINK_TIMEOUT_MS / 1000
             while any(code not in clips_by_code for code in codes):
                 if time.monotonic() >= deadline:
