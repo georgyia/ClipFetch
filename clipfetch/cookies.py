@@ -5,8 +5,9 @@ Firefox stores plaintext cookies in SQLite and Safari uses Apple's
 macOS and Linux use AES-CBC with a Safe Storage password, while current
 Windows releases use a DPAPI-protected AES-GCM key.
 
-Cookie databases are copied before reading because browsers may keep them
-locked. Only cookies for the requested platform host are returned.
+Cookie databases and their write-ahead logs are copied before reading because
+browsers may keep them locked. Only cookies for the requested platform host are
+returned.
 """
 
 from __future__ import annotations
@@ -100,6 +101,13 @@ def _copy_sqlite(path: Path) -> Path:
     copy = temp_dir / path.name
     try:
         shutil.copy2(path, copy)
+        # Firefox and Chrome commonly leave the newest cookies in SQLite's WAL
+        # while they are running.  Keep the sidecars beside the copied database
+        # so SQLite can recover the complete snapshot when it opens the copy.
+        for suffix in ("-wal", "-shm"):
+            sidecar = path.with_name(path.name + suffix)
+            if sidecar.exists():
+                shutil.copy2(sidecar, copy.with_name(copy.name + suffix))
     except Exception:
         shutil.rmtree(temp_dir, ignore_errors=True)
         raise
@@ -191,8 +199,13 @@ def _import_firefox(host: str) -> list[dict[str, Any]]:
     connection: sqlite3.Connection | None = None
     try:
         connection = sqlite3.connect(database)
+        columns = {
+            row[1] for row in connection.execute("PRAGMA table_info(moz_cookies)")
+        }
+        same_site = "sameSite" if "sameSite" in columns else "NULL AS sameSite"
         rows = connection.execute(
-            "SELECT name, value, host, path, expiry, isSecure, isHttpOnly, sameSite "
+            "SELECT name, value, host, path, expiry, isSecure, isHttpOnly, "
+            f"{same_site} "
             "FROM moz_cookies WHERE host = ? OR host LIKE ?",
             (host, f"%.{host}"),
         ).fetchall()
@@ -207,6 +220,34 @@ def _import_firefox(host: str) -> list[dict[str, Any]]:
     ]
 
 
+def _chrome_profile_names(root: Path, local_state: Path) -> list[str]:
+    """Return Chrome profile directories with the last-used profile first."""
+    state: dict[str, Any] = {}
+    try:
+        state = json.loads(local_state.read_text(encoding="utf-8"))
+    except (OSError, ValueError, json.JSONDecodeError):
+        pass
+
+    profile = state.get("profile", {})
+    if not isinstance(profile, dict):
+        profile = {}
+    names = [profile.get("last_used"), "Default"]
+    info_cache = profile.get("info_cache", {})
+    if isinstance(info_cache, dict):
+        names.extend(info_cache)
+    names.extend(path.name for path in sorted(root.glob("Profile *")) if path.is_dir())
+
+    result: list[str] = []
+    for name in names:
+        # Local State is browser-owned input.  Reject separators before using a
+        # profile name as a child path.
+        if (isinstance(name, str) and name not in ("", ".", "..")
+                and "/" not in name and "\\" not in name
+                and name not in result):
+            result.append(name)
+    return result
+
+
 def _chrome_paths() -> tuple[list[Path], Path | None]:
     home = Path.home()
     if sys.platform == "darwin":
@@ -216,8 +257,12 @@ def _chrome_paths() -> tuple[list[Path], Path | None]:
     else:
         roots = [home / ".config/google-chrome", home / ".config/chromium"]
         root = next((candidate for candidate in roots if candidate.exists()), roots[0])
-    profile = root / "Default"
-    return [profile / "Network/Cookies", profile / "Cookies"], root / "Local State"
+    local_state = root / "Local State"
+    paths: list[Path] = []
+    for name in _chrome_profile_names(root, local_state):
+        profile = root / name
+        paths.extend((profile / "Network/Cookies", profile / "Cookies"))
+    return paths, local_state
 
 
 def _read_chrome_rows(path: Path, host: str) -> list[tuple[Any, ...]]:
@@ -248,6 +293,20 @@ def _linux_safe_storage_password() -> bytes:
     for application in ("chrome", "chromium"):
         try:
             password = _run(["secret-tool", "lookup", "application", application])
+        except CookieImportError:
+            continue
+        if password:
+            return password
+    # KDE stores the same safe-storage secret in KWallet instead of libsecret.
+    # Wallet/folder names are the defaults used by Chrome and Chromium.
+    for service, folder in (
+        ("Chrome Safe Storage", "Chrome Keys"),
+        ("Chromium Safe Storage", "Chromium Keys"),
+    ):
+        try:
+            password = _run([
+                "kwallet-query", "-r", service, "-f", folder, "kdewallet",
+            ])
         except CookieImportError:
             continue
         if password:
@@ -303,7 +362,12 @@ def _aes_gcm_decrypt(blob: bytes, key: bytes) -> str:
         ) from None
     if len(blob) < 3 + 12 + 16:
         raise CookieImportError("Chrome returned a truncated encrypted cookie.")
-    plaintext = AESGCM(key).decrypt(blob[3:15], blob[15:], None)
+    try:
+        plaintext = AESGCM(key).decrypt(blob[3:15], blob[15:], None)
+    except Exception as error:
+        raise CookieImportError(
+            "Chrome's encrypted cookie could not be decrypted with its profile key."
+        ) from error
     return _clean_plaintext(plaintext)
 
 
@@ -315,6 +379,11 @@ def _chrome_decrypter(local_state: Path | None) -> Callable[[bytes], str]:
         key = _windows_chrome_key(local_state)
 
         def decrypt_windows(value: bytes) -> str:
+            if value.startswith(b"v20"):
+                raise CookieImportError(
+                    "This Chrome cookie uses Windows app-bound encryption, which "
+                    "cannot be imported outside Chrome; import from Firefox instead."
+                )
             if value.startswith((b"v10", b"v11")):
                 return _aes_gcm_decrypt(value, key)
             return _windows_unprotect(value).decode("utf-8", "replace")
@@ -335,10 +404,14 @@ def _import_chrome(host: str) -> list[dict[str, Any]]:
     paths, local_state = _chrome_paths()
     database = _first_existing(paths, "Chrome")
     rows = _read_chrome_rows(database, host)
-    decrypt = _chrome_decrypter(local_state)
+    decrypt: Callable[[bytes], str] | None = None
     cookies: list[dict[str, Any]] = []
     for name, plain, encrypted, domain, path, expiry, secure, http_only, same_site in rows:
-        value = plain or (decrypt(bytes(encrypted)) if encrypted else "")
+        value = plain
+        if not value and encrypted:
+            if decrypt is None:
+                decrypt = _chrome_decrypter(local_state)
+            value = decrypt(bytes(encrypted))
         if value:
             cookies.append(
                 _cookie(name, value, domain, path, bool(secure), _chrome_expiry(expiry),

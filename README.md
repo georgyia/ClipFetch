@@ -205,9 +205,11 @@ The command is report-only: it never deletes, moves, renames, links, or rewrites
 Potential recoverable bytes assume you manually keep the largest member of each group.
 Review paths and play every probable match before doing any cleanup yourself.
 
-Firefox import needs no extra package. Modern Windows Chrome encryption additionally
-requires `pip install "clipfetch[cookies]"`; Safari may require granting the terminal
-Full Disk Access in macOS System Settings.
+Firefox import needs no extra package. ClipFetch reads the browser's last-used Chrome
+profile and supports Secret Service or KWallet on Linux. Windows Chrome AES-GCM
+encryption additionally requires `pip install "clipfetch[cookies]"`; newer app-bound
+(`v20`) Windows cookies cannot be decrypted outside Chrome, so use Firefox for those.
+Safari may require granting the terminal Full Disk Access in macOS System Settings.
 
 ### Browser integration test
 
