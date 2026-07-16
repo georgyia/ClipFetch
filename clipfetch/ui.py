@@ -197,7 +197,9 @@ class MultiProgress:
         self._rendered_lines = 0
 
     def __enter__(self) -> MultiProgress:
-        self._started_at = self._clock()
+        # Collection can take much longer than downloading. Start the rate
+        # window on the first actual byte delta so that delay does not inflate ETA.
+        self._started_at = None
         if self._console.ansi:
             self._console.stream.write(_HIDE_CURSOR)
             self._thread = threading.Thread(target=self._render_loop, daemon=True)
@@ -227,7 +229,10 @@ class MultiProgress:
     def update(self, task_id: int, done: int, total: int | None = None) -> None:
         with self._lock:
             task = self._tasks[task_id]
-            task.transferred += max(0, done - task.done)
+            delta = max(0, done - task.done)
+            if delta and self._started_at is None:
+                self._started_at = self._clock()
+            task.transferred += delta
             task.done = done
             if total is not None:
                 task.total = total

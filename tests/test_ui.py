@@ -54,6 +54,23 @@ def test_resumed_bytes_are_not_counted_as_new_transfer():
     assert progress._snapshot()[0][1].transferred == 250
 
 
+def test_eta_rate_window_starts_with_first_byte_not_collection():
+    stream = io.StringIO()
+    console = Console(stream)
+    now = {"value": 0.0}
+    progress = MultiProgress(console, 1, clock=lambda: now["value"])
+    progress.__enter__()
+    progress.add(1, "clip.mp4", total=1_000)
+
+    now["value"] = 60.0  # feed collection delay before the download starts
+    progress.update(1, 500)
+    now["value"] = 70.0
+    progress._render()
+
+    assert "500 B transferred" in stream.getvalue()
+    assert "ETA 10s" in stream.getvalue()
+
+
 def test_warning_box_without_body_lines():
     stream = io.StringIO()
     Console(stream).warning_box("Just a title", [])
