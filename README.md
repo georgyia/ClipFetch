@@ -88,6 +88,9 @@ clipfetch watch reels --collection viral-founders --shuffle
 clipfetch library export reels --collection viral-founders --format m3u
 clipfetch library export reels --collection viral-founders --format json
 clipfetch -reels 25 --min-likes 1m --topic entrepreneurship --scan-limit 250
+pip install "clipfetch[transcribe]"  # optional local speech enrichment
+clipfetch library enrich transcript reels
+clipfetch library enrich transcript reels --topic entrepreneurship --model base
 clipfetch --help                     # all options
 ```
 
@@ -143,6 +146,21 @@ clips to attempt; `--scan-limit` bounds unique feed candidates (default `max(100
 The summary reports scanned, accepted, rejected-by-predicate, and unknown-required-metadata
 counts. Topic selection uses the same local definitions/model and never stores rejected CDN
 URLs. `--dry-run` prints accepted candidates only.
+
+### Local speech transcripts
+
+The separate `transcribe` extra uses Faster-Whisper 1.2.1 with the multilingual `base`
+model and CPU `int8` inference by default. Media decoding is provided by packaged PyAV, so
+a system FFmpeg executable is not normally required. First use downloads the selected model;
+runtime and memory grow with model size and clip duration.
+
+Only local video/audio files are decoded. Media and transcript text are never uploaded.
+ClipFetch stores normalized transcript text separately from captions, together with language,
+model identity, source-file hash, processing time, and status. Runs resume by hash, commit
+each file independently, and distinguish completed, silent, unsupported, skipped, and failed
+files. Transcript changes invalidate only affected semantic vectors and generated topics;
+manual topic corrections remain intact. Re-run `library semantic-index` and then
+`library categorize` to rebuild only the invalidated generated data.
 
 Firefox import needs no extra package. Modern Windows Chrome encryption additionally
 requires `pip install "clipfetch[cookies]"`; Safari may require granting the terminal

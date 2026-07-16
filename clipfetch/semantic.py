@@ -93,6 +93,8 @@ def semantic_document(record: CatalogRecord) -> str | None:
         parts.append(f"caption: {record.caption.strip()}")
     if record.hashtags:
         parts.append("hashtags: " + " ".join(f"#{tag}" for tag in record.hashtags))
+    if record.transcript_text and record.transcript_text.strip():
+        parts.append(f"transcript: {record.transcript_text.strip()}")
     return "\n".join(parts) or None
 
 

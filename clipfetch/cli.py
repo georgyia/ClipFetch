@@ -334,6 +334,7 @@ def _run_library(args: list[str], console: Console) -> int:
     )
     from clipfetch.semantic import SemanticError
     from clipfetch.topics import TopicError
+    from clipfetch.transcription import TranscriptionError
 
     def magnitude(value: str) -> int:
         try:
@@ -423,6 +424,22 @@ def _run_library(args: list[str], console: Console) -> int:
     export_parser.add_argument("--collection", required=True)
     export_parser.add_argument("--format", choices=["m3u", "json"], required=True)
     export_parser.add_argument("--out", type=Path)
+    enrich_parser = commands.add_parser("enrich", help="add optional local enrichments")
+    enrich_commands = enrich_parser.add_subparsers(dest="enrich_command", required=True)
+    transcript_parser = enrich_commands.add_parser("transcript")
+    transcript_parser.add_argument("dir", nargs="?", default="reels", type=Path)
+    transcript_parser.add_argument("--model", default="base")
+    transcript_parser.add_argument("--force", action="store_true")
+    transcript_parser.add_argument("--min-likes", type=magnitude)
+    transcript_parser.add_argument("--max-likes", type=magnitude)
+    transcript_parser.add_argument("--min-views", type=magnitude)
+    transcript_parser.add_argument("--max-views", type=magnitude)
+    transcript_parser.add_argument("--author", action="append", default=[])
+    transcript_parser.add_argument("--hashtag", action="append", default=[])
+    transcript_parser.add_argument("--platform", action="append", default=[])
+    transcript_parser.add_argument("--topic", action="append", default=[])
+    transcript_parser.add_argument("--downloaded-after", type=date_value)
+    transcript_parser.add_argument("--downloaded-before", type=date_value)
     try:
         parsed = parser.parse_args(args)
     except SystemExit as exit_:
@@ -630,6 +647,48 @@ def _run_library(args: list[str], console: Console) -> int:
                 console.stream.write(output)
                 console.stream.flush()
             return 0
+        if parsed.command == "enrich":
+            from clipfetch.transcription import (
+                DEFAULT_TRANSCRIPT_CACHE,
+                FasterWhisperTranscriber,
+                enrich_transcripts,
+            )
+
+            filters = ClipFilter(
+                min_likes=parsed.min_likes,
+                max_likes=parsed.max_likes,
+                min_views=parsed.min_views,
+                max_views=parsed.max_views,
+                authors=tuple(parsed.author),
+                hashtags=tuple(parsed.hashtag),
+                platforms=tuple(parsed.platform),
+                topics=tuple(parsed.topic),
+                downloaded_after=parsed.downloaded_after,
+                downloaded_before=parsed.downloaded_before,
+            )
+            if not DEFAULT_TRANSCRIPT_CACHE.exists():
+                console.info(
+                    f"First use downloads the {parsed.model!r} transcription model to "
+                    f"{DEFAULT_TRANSCRIPT_CACHE}; media and text stay local."
+                )
+            transcriber = FasterWhisperTranscriber(parsed.model)
+
+            def transcript_progress(index, total, status, record) -> None:
+                console.dim(f"  [{index}/{total}] {record.clip_id}: {status}")
+
+            report = enrich_transcripts(
+                parsed.dir,
+                transcriber,
+                filters,
+                force=parsed.force,
+                on_progress=transcript_progress,
+            )
+            console.success(
+                f"Transcripts: {report.completed} completed, {report.skipped} skipped, "
+                f"{report.silent} silent, {report.unsupported} unsupported, "
+                f"{report.failed} failed."
+            )
+            return 0
         if len(parsed.values) == 1:
             root, clip_id = Path("reels"), parsed.values[0]
         elif len(parsed.values) == 2:
@@ -652,7 +711,13 @@ def _run_library(args: list[str], console: Console) -> int:
             for key, item in value.items():
                 console.print(f"{key.replace('_', ' ').title()}: {item}")
         return 0
-    except (CatalogError, CollectionError, SemanticError, TopicError) as err:
+    except (
+        CatalogError,
+        CollectionError,
+        SemanticError,
+        TopicError,
+        TranscriptionError,
+    ) as err:
         console.error(str(err))
         return 1
 

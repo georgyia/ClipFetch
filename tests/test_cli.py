@@ -3,6 +3,7 @@ from pathlib import Path
 
 import pytest
 
+from clipfetch.catalog import Catalog
 from clipfetch.cli import MAX_WORKERS, main, parse_args
 from clipfetch.model import Quality
 
@@ -308,3 +309,30 @@ def test_collection_cli_save_show_export_and_filtered_watch(tmp_path, capsys, mo
     monkeypatch.setattr(watcher, "watch", fake_watch)
     assert main(["watch", str(tmp_path), "--collection", "viral"]) == 0
     assert captured == [video]
+
+
+def test_transcript_enrichment_cli_with_fake_backend(tmp_path, capsys, monkeypatch):
+    video = tmp_path / "reel_001_ABC.mp4"
+    video.write_bytes(b"video")
+    assert main(["library", "index", str(tmp_path)]) == 0
+
+    class Fake:
+        model_id = "fake/base"
+        revision = "v1"
+
+        def __init__(self, model):
+            self.model_id = "fake/" + model
+
+        def transcribe(self, path):
+            from clipfetch.transcription import TranscriptResult
+
+            return TranscriptResult("spoken startup advice", "en")
+
+    from clipfetch import transcription
+
+    monkeypatch.setattr(transcription, "FasterWhisperTranscriber", Fake)
+    capsys.readouterr()
+    assert main(["library", "enrich", "transcript", str(tmp_path), "--model", "base"]) == 0
+    assert "1 completed" in capsys.readouterr().out
+    with Catalog.open(tmp_path) as catalog:
+        assert catalog.get("instagram", "ABC").transcript_text == "spoken startup advice"

@@ -6,7 +6,7 @@ import json
 import re
 import sqlite3
 import threading
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable
@@ -15,7 +15,7 @@ from clipfetch.model import Clip, ClipMetadata
 
 CATALOG_DIR = ".clipfetch"
 CATALOG_NAME = "catalog.sqlite3"
-CURRENT_SCHEMA_VERSION = 4
+CURRENT_SCHEMA_VERSION = 5
 
 _VIDEO_NAME = re.compile(r"^(reel|tiktok|short)_\d+_(.+)\.mp4$")
 _PLATFORM_FOR_NOUN = {"reel": "instagram", "tiktok": "tiktok", "short": "youtube"}
@@ -59,6 +59,15 @@ class CatalogRecord:
     shares: int | None = None
     duration_seconds: float | None = None
     published_at: str | None = None
+    transcript_text: str | None = None
+    transcript_language: str | None = None
+    transcript_model_id: str | None = None
+    transcript_model_revision: str | None = None
+    transcript_source_hash: str | None = None
+    transcript_processing_seconds: float | None = None
+    transcript_status: str | None = None
+    transcript_error: str | None = None
+    transcript_updated_at: str | None = None
 
 
 @dataclass(frozen=True)
@@ -176,11 +185,27 @@ def _migration_4(connection: sqlite3.Connection) -> None:
     connection.execute("CREATE INDEX topic_name_idx ON topic_assignments(topic)")
 
 
+def _migration_5(connection: sqlite3.Connection) -> None:
+    for definition in (
+        "transcript_text TEXT",
+        "transcript_language TEXT",
+        "transcript_model_id TEXT",
+        "transcript_model_revision TEXT",
+        "transcript_source_hash TEXT",
+        "transcript_processing_seconds REAL",
+        "transcript_status TEXT",
+        "transcript_error TEXT",
+        "transcript_updated_at TEXT",
+    ):
+        connection.execute(f"ALTER TABLE clips ADD COLUMN {definition}")
+
+
 MIGRATIONS: dict[int, Migration] = {
     1: _migration_1,
     2: _migration_2,
     3: _migration_3,
     4: _migration_4,
+    5: _migration_5,
 }
 
 
@@ -282,6 +307,19 @@ class Catalog:
 
     def upsert(self, record: CatalogRecord) -> str:
         existing = self.get(record.platform, record.clip_id)
+        if existing and record.transcript_model_id is None:
+            record = replace(
+                record,
+                transcript_text=existing.transcript_text,
+                transcript_language=existing.transcript_language,
+                transcript_model_id=existing.transcript_model_id,
+                transcript_model_revision=existing.transcript_model_revision,
+                transcript_source_hash=existing.transcript_source_hash,
+                transcript_processing_seconds=existing.transcript_processing_seconds,
+                transcript_status=existing.transcript_status,
+                transcript_error=existing.transcript_error,
+                transcript_updated_at=existing.transcript_updated_at,
+            )
         if existing == record:
             return "unchanged"
         values = (
@@ -432,11 +470,7 @@ class Catalog:
     def topic_names(self, platform: str, clip_id: str) -> tuple[str, ...]:
         assignments = self.topic_assignments(platform, clip_id)
         manual = {item.topic for item in assignments if item.provenance == "manual"}
-        generated = {
-            item.topic
-            for item in assignments
-            if item.provenance == "model" and item.topic != "uncategorized"
-        }
+        generated = {item.topic for item in assignments if item.provenance == "model"}
         return tuple(sorted(manual | generated))
 
     def replace_model_topics(
@@ -494,6 +528,62 @@ class Catalog:
     def remove_topic(self, topic: str) -> None:
         with self._lock, self._connection:
             self._connection.execute("DELETE FROM topic_assignments WHERE topic = ?", (topic,))
+
+    def set_transcript(
+        self,
+        platform: str,
+        clip_id: str,
+        *,
+        text: str | None,
+        language: str | None,
+        model_id: str,
+        model_revision: str,
+        source_hash: str,
+        processing_seconds: float,
+        status: str,
+        error: str | None = None,
+    ) -> None:
+        with self._lock, self._connection:
+            previous = self._connection.execute(
+                "SELECT transcript_text FROM clips WHERE platform = ? AND clip_id = ?",
+                (platform, clip_id),
+            ).fetchone()
+            if previous is None:
+                raise CatalogError(f"clip id not found for transcript: {clip_id}")
+            cursor = self._connection.execute(
+                """
+                UPDATE clips SET transcript_text = ?, transcript_language = ?,
+                    transcript_model_id = ?, transcript_model_revision = ?,
+                    transcript_source_hash = ?, transcript_processing_seconds = ?,
+                    transcript_status = ?, transcript_error = ?, transcript_updated_at = ?
+                WHERE platform = ? AND clip_id = ?
+                """,
+                (
+                    text,
+                    language,
+                    model_id,
+                    model_revision,
+                    source_hash,
+                    processing_seconds,
+                    status,
+                    error,
+                    datetime.now(timezone.utc).isoformat(),
+                    platform,
+                    clip_id,
+                ),
+            )
+            if previous["transcript_text"] != text:
+                self._connection.execute(
+                    "DELETE FROM semantic_embeddings WHERE platform = ? AND clip_id = ?",
+                    (platform, clip_id),
+                )
+                self._connection.execute(
+                    "DELETE FROM topic_assignments "
+                    "WHERE platform = ? AND clip_id = ? AND provenance = 'model'",
+                    (platform, clip_id),
+                )
+        if cursor.rowcount != 1:  # Defensive: the row is selected under the same write lock.
+            raise CatalogError(f"clip id not found for transcript: {clip_id}")
 
 
 def _migrate(connection: sqlite3.Connection) -> None:
@@ -627,6 +717,15 @@ def _record_from_row(row: sqlite3.Row) -> CatalogRecord:
         shares=row["shares"],
         duration_seconds=row["duration_seconds"],
         published_at=row["published_at"],
+        transcript_text=row["transcript_text"],
+        transcript_language=row["transcript_language"],
+        transcript_model_id=row["transcript_model_id"],
+        transcript_model_revision=row["transcript_model_revision"],
+        transcript_source_hash=row["transcript_source_hash"],
+        transcript_processing_seconds=row["transcript_processing_seconds"],
+        transcript_status=row["transcript_status"],
+        transcript_error=row["transcript_error"],
+        transcript_updated_at=row["transcript_updated_at"],
     )
 
 
