@@ -1,0 +1,46 @@
+{
+  "schema_version": 1,
+  "fixtures": [
+    {
+      "file": "static_title.mp4",
+      "expected": ["BUILD YOUR STARTUP"],
+      "category": "static title"
+    },
+    {
+      "file": "moving_subtitles.mp4",
+      "expected": ["Learn from every failure", "Ship the useful version"],
+      "category": "moving subtitles"
+    },
+    {
+      "file": "repeated_caption.mp4",
+      "expected": ["Validate with customers"],
+      "category": "repeated caption"
+    },
+    {
+      "file": "low_contrast.mp4",
+      "expected": ["quiet product lesson"],
+      "category": "low contrast"
+    },
+    {
+      "file": "no_text.mp4",
+      "expected": [],
+      "category": "no text"
+    },
+    {
+      "file": "rotated_text.mp4",
+      "expected": ["ROTATED INSIGHT"],
+      "category": "rotated text"
+    },
+    {
+      "file": "unicode.mp4",
+      "expected": ["Café", "東京", "مرحبا"],
+      "category": "mixed-script Unicode"
+    },
+    {
+      "file": "corrupt.mp4",
+      "expected_status": "corrupt",
+      "expected": [],
+      "category": "corrupt video"
+    }
+  ]
+}

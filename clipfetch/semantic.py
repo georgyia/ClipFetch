@@ -97,6 +97,8 @@ def semantic_document(record: CatalogRecord) -> str | None:
         parts.append(f"transcript: {record.transcript_text.strip()}")
     if record.comment_text and record.comment_text.strip():
         parts.append(f"comments: {record.comment_text.strip()}")
+    if record.visible_text and record.visible_text.strip():
+        parts.append(f"visible text: {record.visible_text.strip()}")
     return "\n".join(parts) or None
 
 

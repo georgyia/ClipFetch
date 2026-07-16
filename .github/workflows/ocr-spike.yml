@@ -1,0 +1,22 @@
+name: OCR spike benchmark
+
+on:
+  push:
+    branches: [spike/ocr-28]
+
+jobs:
+  benchmark-linux:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+      - run: pip install rapidocr==3.9.1 onnxruntime==1.27.0 "av>=11"
+      - run: PYTHONPATH=. python scripts/benchmark_visible_text.py | tee ocr-linux.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ocr-linux-benchmark
+          path: ocr-linux.txt

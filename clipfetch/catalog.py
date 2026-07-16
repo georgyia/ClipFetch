@@ -15,7 +15,7 @@ from clipfetch.model import Clip, ClipMetadata
 
 CATALOG_DIR = ".clipfetch"
 CATALOG_NAME = "catalog.sqlite3"
-CURRENT_SCHEMA_VERSION = 7
+CURRENT_SCHEMA_VERSION = 8
 
 _VIDEO_NAME = re.compile(r"^(reel|tiktok|short)_\d+_(.+)\.mp4$")
 _PLATFORM_FOR_NOUN = {"reel": "instagram", "tiktok": "tiktok", "short": "youtube"}
@@ -72,6 +72,26 @@ class CatalogRecord:
     comment_status: str | None = None
     comment_retrieved_at: str | None = None
     comment_error: str | None = None
+    visible_text: str | None = None
+    visible_text_segments: tuple[VisibleTextSegment, ...] = ()
+    visible_text_confidence: float | None = None
+    visible_text_model_id: str | None = None
+    visible_text_model_revision: str | None = None
+    visible_text_source_hash: str | None = None
+    visible_text_sample_policy: str | None = None
+    visible_text_processing_seconds: float | None = None
+    visible_text_status: str | None = None
+    visible_text_error: str | None = None
+    visible_text_updated_at: str | None = None
+
+
+@dataclass(frozen=True)
+class VisibleTextSegment:
+    """One retained OCR line and its representative video timestamp."""
+
+    timestamp_seconds: float
+    text: str
+    confidence: float
 
 
 @dataclass(frozen=True)
@@ -280,6 +300,23 @@ def _migration_7(connection: sqlite3.Connection) -> None:
     connection.execute("CREATE INDEX media_signature_hash_idx ON media_signatures(file_hash)")
 
 
+def _migration_8(connection: sqlite3.Connection) -> None:
+    for definition in (
+        "visible_text TEXT",
+        "visible_text_segments_json TEXT NOT NULL DEFAULT '[]'",
+        "visible_text_confidence REAL",
+        "visible_text_model_id TEXT",
+        "visible_text_model_revision TEXT",
+        "visible_text_source_hash TEXT",
+        "visible_text_sample_policy TEXT",
+        "visible_text_processing_seconds REAL",
+        "visible_text_status TEXT",
+        "visible_text_error TEXT",
+        "visible_text_updated_at TEXT",
+    ):
+        connection.execute(f"ALTER TABLE clips ADD COLUMN {definition}")
+
+
 MIGRATIONS: dict[int, Migration] = {
     1: _migration_1,
     2: _migration_2,
@@ -288,6 +325,7 @@ MIGRATIONS: dict[int, Migration] = {
     5: _migration_5,
     6: _migration_6,
     7: _migration_7,
+    8: _migration_8,
 }
 
 
@@ -409,6 +447,21 @@ class Catalog:
                 comment_status=existing.comment_status,
                 comment_retrieved_at=existing.comment_retrieved_at,
                 comment_error=existing.comment_error,
+            )
+        if existing and record.visible_text_model_id is None:
+            record = replace(
+                record,
+                visible_text=existing.visible_text,
+                visible_text_segments=existing.visible_text_segments,
+                visible_text_confidence=existing.visible_text_confidence,
+                visible_text_model_id=existing.visible_text_model_id,
+                visible_text_model_revision=existing.visible_text_model_revision,
+                visible_text_source_hash=existing.visible_text_source_hash,
+                visible_text_sample_policy=existing.visible_text_sample_policy,
+                visible_text_processing_seconds=existing.visible_text_processing_seconds,
+                visible_text_status=existing.visible_text_status,
+                visible_text_error=existing.visible_text_error,
+                visible_text_updated_at=existing.visible_text_updated_at,
             )
         if existing == record:
             return "unchanged"
@@ -666,6 +719,73 @@ class Catalog:
                 self._invalidate_generated(platform, clip_id)
         if cursor.rowcount != 1:  # Defensive: the row is selected under the same write lock.
             raise CatalogError(f"clip id not found for transcript: {clip_id}")
+
+    def set_visible_text(
+        self,
+        platform: str,
+        clip_id: str,
+        *,
+        text: str | None,
+        segments: tuple[VisibleTextSegment, ...],
+        confidence: float | None,
+        model_id: str,
+        model_revision: str,
+        source_hash: str,
+        sample_policy: str,
+        processing_seconds: float,
+        status: str,
+        error: str | None = None,
+    ) -> None:
+        """Store one terminal OCR result and invalidate only changed derived data."""
+        serialized = json.dumps(
+            [
+                {
+                    "timestamp_seconds": item.timestamp_seconds,
+                    "text": item.text,
+                    "confidence": item.confidence,
+                }
+                for item in segments
+            ],
+            ensure_ascii=False,
+            separators=(",", ":"),
+        )
+        with self._lock, self._connection:
+            previous = self._connection.execute(
+                "SELECT visible_text FROM clips WHERE platform = ? AND clip_id = ?",
+                (platform, clip_id),
+            ).fetchone()
+            if previous is None:
+                raise CatalogError(f"clip id not found for visible text: {clip_id}")
+            cursor = self._connection.execute(
+                """
+                UPDATE clips SET visible_text = ?, visible_text_segments_json = ?,
+                    visible_text_confidence = ?, visible_text_model_id = ?,
+                    visible_text_model_revision = ?, visible_text_source_hash = ?,
+                    visible_text_sample_policy = ?, visible_text_processing_seconds = ?,
+                    visible_text_status = ?, visible_text_error = ?,
+                    visible_text_updated_at = ?
+                WHERE platform = ? AND clip_id = ?
+                """,
+                (
+                    text,
+                    serialized,
+                    confidence,
+                    model_id,
+                    model_revision,
+                    source_hash,
+                    sample_policy,
+                    processing_seconds,
+                    status,
+                    error,
+                    datetime.now(timezone.utc).isoformat(),
+                    platform,
+                    clip_id,
+                ),
+            )
+            if previous["visible_text"] != text:
+                self._invalidate_generated(platform, clip_id)
+        if cursor.rowcount != 1:
+            raise CatalogError(f"clip id not found for visible text: {clip_id}")
 
     def comments_for(self, platform: str, clip_id: str) -> list[CatalogComment]:
         rows = self._connection.execute(
@@ -934,6 +1054,14 @@ def _text(value: Any) -> str | None:
 
 
 def _record_from_row(row: sqlite3.Row) -> CatalogRecord:
+    visible_segments = tuple(
+        VisibleTextSegment(
+            float(item["timestamp_seconds"]),
+            str(item["text"]),
+            float(item["confidence"]),
+        )
+        for item in json.loads(row["visible_text_segments_json"])
+    )
     return CatalogRecord(
         platform=row["platform"],
         clip_id=row["clip_id"],
@@ -966,6 +1094,17 @@ def _record_from_row(row: sqlite3.Row) -> CatalogRecord:
         comment_status=row["comment_status"],
         comment_retrieved_at=row["comment_retrieved_at"],
         comment_error=row["comment_error"],
+        visible_text=row["visible_text"],
+        visible_text_segments=visible_segments,
+        visible_text_confidence=row["visible_text_confidence"],
+        visible_text_model_id=row["visible_text_model_id"],
+        visible_text_model_revision=row["visible_text_model_revision"],
+        visible_text_source_hash=row["visible_text_source_hash"],
+        visible_text_sample_policy=row["visible_text_sample_policy"],
+        visible_text_processing_seconds=row["visible_text_processing_seconds"],
+        visible_text_status=row["visible_text_status"],
+        visible_text_error=row["visible_text_error"],
+        visible_text_updated_at=row["visible_text_updated_at"],
     )
 
 

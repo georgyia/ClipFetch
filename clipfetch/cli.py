@@ -337,6 +337,7 @@ def _run_library(args: list[str], console: Console) -> int:
     from clipfetch.semantic import SemanticError
     from clipfetch.topics import TopicError
     from clipfetch.transcription import TranscriptionError
+    from clipfetch.visible_text import VisibleTextError
 
     def magnitude(value: str) -> int:
         try:
@@ -442,6 +443,19 @@ def _run_library(args: list[str], console: Console) -> int:
     transcript_parser.add_argument("--topic", action="append", default=[])
     transcript_parser.add_argument("--downloaded-after", type=date_value)
     transcript_parser.add_argument("--downloaded-before", type=date_value)
+    visible_text_parser = enrich_commands.add_parser("visible-text")
+    visible_text_parser.add_argument("dir", nargs="?", default="reels", type=Path)
+    visible_text_parser.add_argument("--force", action="store_true")
+    visible_text_parser.add_argument("--min-likes", type=magnitude)
+    visible_text_parser.add_argument("--max-likes", type=magnitude)
+    visible_text_parser.add_argument("--min-views", type=magnitude)
+    visible_text_parser.add_argument("--max-views", type=magnitude)
+    visible_text_parser.add_argument("--author", action="append", default=[])
+    visible_text_parser.add_argument("--hashtag", action="append", default=[])
+    visible_text_parser.add_argument("--platform", action="append", default=[])
+    visible_text_parser.add_argument("--topic", action="append", default=[])
+    visible_text_parser.add_argument("--downloaded-after", type=date_value)
+    visible_text_parser.add_argument("--downloaded-before", type=date_value)
     comments_parser = enrich_commands.add_parser("comments")
     comments_parser.add_argument("dir", nargs="?", default="reels", type=Path)
     comments_parser.add_argument("--max-comments", type=_positive_int, default=20)
@@ -687,6 +701,32 @@ def _run_library(args: list[str], console: Console) -> int:
                 downloaded_after=parsed.downloaded_after,
                 downloaded_before=parsed.downloaded_before,
             )
+            if parsed.enrich_command == "visible-text":
+                from clipfetch.visible_text import RapidOCRExtractor, enrich_visible_text
+
+                console.info(
+                    "Visible-text enrichment samples at most 30 local frames per clip; "
+                    "the optional OCR environment uses about 300 MB on macOS."
+                )
+                extractor = RapidOCRExtractor()
+
+                def visible_text_progress(index, total, status, record) -> None:
+                    console.dim(f"  [{index}/{total}] {record.clip_id}: {status}")
+
+                visible_report = enrich_visible_text(
+                    parsed.dir,
+                    extractor,
+                    filters,
+                    force=parsed.force,
+                    on_progress=visible_text_progress,
+                )
+                console.success(
+                    f"Visible text: {visible_report.completed} completed, "
+                    f"{visible_report.skipped} skipped, {visible_report.empty} empty, "
+                    f"{visible_report.unsupported} unsupported, "
+                    f"{visible_report.corrupt} corrupt, {visible_report.failed} failed."
+                )
+                return 0
             if parsed.enrich_command == "comments":
                 from clipfetch import session
                 from clipfetch.comments import (
@@ -850,6 +890,7 @@ def _run_library(args: list[str], console: Console) -> int:
         SemanticError,
         TopicError,
         TranscriptionError,
+        VisibleTextError,
     ) as err:
         console.error(str(err))
         return 1
