@@ -324,6 +324,7 @@ def _run_library(args: list[str], console: Console) -> int:
     from clipfetch.catalog import CatalogError, index_library
     from clipfetch.collections import CollectionError
     from clipfetch.comments import CommentsError
+    from clipfetch.duplicates import DuplicateError
     from clipfetch.library import (
         ClipFilter,
         find_clip,
@@ -460,6 +461,12 @@ def _run_library(args: list[str], console: Console) -> int:
         "purge-comments", help="remove all locally retained comment enrichment"
     )
     purge_comments_parser.add_argument("dir", nargs="?", default="reels", type=Path)
+    duplicates_parser = commands.add_parser(
+        "duplicates", help="report exact and probable duplicate media"
+    )
+    duplicates_parser.add_argument("dir", nargs="?", default="reels", type=Path)
+    duplicates_parser.add_argument("--include-near", action="store_true")
+    duplicates_parser.add_argument("--json", action="store_true")
     try:
         parsed = parser.parse_args(args)
     except SystemExit as exit_:
@@ -765,6 +772,54 @@ def _run_library(args: list[str], console: Console) -> int:
             purged = purge_comments(parsed.dir)
             console.success(f"Purged comment enrichment from {purged} clip(s).")
             return 0
+        if parsed.command == "duplicates":
+            from clipfetch.duplicates import report_to_dict, scan_duplicates
+            from clipfetch.ui import human_size
+
+            def duplicate_progress(index, total, status, record) -> None:
+                console.dim(f"  [{index}/{total}] {record.clip_id}: {status}")
+
+            duplicate_report = scan_duplicates(
+                parsed.dir,
+                include_near=parsed.include_near,
+                on_progress=None if parsed.json else duplicate_progress,
+            )
+            if parsed.json:
+                console.print(
+                    json.dumps(
+                        report_to_dict(duplicate_report),
+                        ensure_ascii=False,
+                        indent=2,
+                    )
+                )
+                return 0
+            for number, group in enumerate(duplicate_report.groups, start=1):
+                label = "exact" if group.match_type == "exact" else "probable near"
+                console.print(
+                    f"{number}. {label} duplicate group "
+                    f"(confidence {group.confidence:.3f}, "
+                    f"potentially {human_size(group.recoverable_bytes)} recoverable)"
+                )
+                for member in group.members:
+                    console.print(
+                        f"   {member.platform}:{member.clip_id}  "
+                        f"{human_size(member.size)}  {member.relative_path}"
+                    )
+            for outcome in duplicate_report.outcomes:
+                if outcome.status in {"missing", "unsupported", "corrupt", "failed"}:
+                    console.error(
+                        f"{outcome.platform}:{outcome.clip_id}: {outcome.status}"
+                        + (f" ({outcome.error})" if outcome.error else "")
+                    )
+            console.info(
+                f"Duplicate scan: {duplicate_report.scanned} cataloged, "
+                f"{duplicate_report.hashed} hashed, "
+                f"{duplicate_report.hash_cache_hits} hash cache hit(s), "
+                f"{duplicate_report.decoded} decoded, "
+                f"{len(duplicate_report.groups)} group(s)."
+            )
+            console.info("Report only: no video files were changed.")
+            return 0
         if len(parsed.values) == 1:
             root, clip_id = Path("reels"), parsed.values[0]
         elif len(parsed.values) == 2:
@@ -791,6 +846,7 @@ def _run_library(args: list[str], console: Console) -> int:
         CatalogError,
         CollectionError,
         CommentsError,
+        DuplicateError,
         SemanticError,
         TopicError,
         TranscriptionError,

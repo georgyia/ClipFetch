@@ -93,6 +93,9 @@ clipfetch library enrich transcript reels
 clipfetch library enrich transcript reels --topic entrepreneurship --model base
 clipfetch library enrich comments reels --max-comments 20 --min-likes 1m
 clipfetch library purge-comments reels
+clipfetch library duplicates reels --json
+pip install "clipfetch[duplicates]"  # optional near-video frame decoding
+clipfetch library duplicates reels --include-near
 clipfetch --help                     # all options
 ```
 
@@ -183,6 +186,24 @@ Use it only where permitted by Instagram's terms and your local privacy obligati
 `library purge-comments DIR` to remove all stored comment ids/text and invalidate affected
 generated analysis; manual topics remain. Re-run `library semantic-index` and `library
 categorize` afterward to rebuild without comments.
+
+### Safe duplicate reports
+
+`library duplicates` streams complete files through SHA-256 and reports byte-identical
+groups, even when platform ids or metadata differ. `--include-near` additionally uses
+packaged PyAV to sample eight bounded frames plus duration; it does not require a system
+FFmpeg executable. Exact and perceptual signatures are cached against file hash, size,
+mtime, and algorithm version so unchanged scans avoid hashing/decoding work.
+
+Exact groups are definitive byte matches. Near groups are labeled **probable**, include a
+distance/confidence, and require visual review; related captions, topics, and semantic
+vectors are never treated as duplicate evidence. Missing, unsupported, and corrupt files
+are reported independently without aborting the scan. See the
+[fixture calibration](docs/duplicate-calibration.md) for the threshold and limitations.
+
+The command is report-only: it never deletes, moves, renames, links, or rewrites a video.
+Potential recoverable bytes assume you manually keep the largest member of each group.
+Review paths and play every probable match before doing any cleanup yourself.
 
 Firefox import needs no extra package. Modern Windows Chrome encryption additionally
 requires `pip install "clipfetch[cookies]"`; Safari may require granting the terminal

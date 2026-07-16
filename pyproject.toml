@@ -34,6 +34,7 @@ dev = ["pytest>=7", "ruff>=0.4", "mypy>=1.10"]
 cookies = ["cryptography>=41"]
 semantic = ["fastembed==0.8.0"]
 transcribe = ["faster-whisper==1.2.1"]
+duplicates = ["av>=11"]
 
 [tool.setuptools.dynamic]
 version = { attr = "clipfetch.__version__" }
@@ -48,6 +49,7 @@ markers = [
     "integration: opt-in tests that launch a real browser",
     "semantic_integration: opt-in tests that download and run the real embedding model",
     "transcription_integration: opt-in test that downloads/runs Faster-Whisper",
+    "duplicate_integration: opt-in transformed-video perceptual-hash calibration",
 ]
 
 [tool.ruff]

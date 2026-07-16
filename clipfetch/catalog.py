@@ -15,7 +15,7 @@ from clipfetch.model import Clip, ClipMetadata
 
 CATALOG_DIR = ".clipfetch"
 CATALOG_NAME = "catalog.sqlite3"
-CURRENT_SCHEMA_VERSION = 6
+CURRENT_SCHEMA_VERSION = 7
 
 _VIDEO_NAME = re.compile(r"^(reel|tiktok|short)_\d+_(.+)\.mp4$")
 _PLATFORM_FOR_NOUN = {"reel": "instagram", "tiktok": "tiktok", "short": "youtube"}
@@ -83,6 +83,23 @@ class CatalogComment:
     comment_id: str
     text: str
     retrieved_at: str
+
+
+@dataclass(frozen=True)
+class MediaSignature:
+    """Cached exact/perceptual signature for one specific file revision."""
+
+    platform: str
+    clip_id: str
+    file_hash: str
+    file_size: int
+    file_mtime_ns: int
+    algorithm_version: str
+    duration_seconds: float | None
+    frame_hashes: tuple[int, ...]
+    status: str
+    error: str | None
+    generated_at: str
 
 
 @dataclass(frozen=True)
@@ -239,6 +256,30 @@ def _migration_6(connection: sqlite3.Connection) -> None:
     )
 
 
+def _migration_7(connection: sqlite3.Connection) -> None:
+    connection.execute(
+        """
+        CREATE TABLE media_signatures (
+            platform TEXT NOT NULL,
+            clip_id TEXT NOT NULL,
+            file_hash TEXT NOT NULL,
+            file_size INTEGER NOT NULL,
+            file_mtime_ns INTEGER NOT NULL,
+            algorithm_version TEXT NOT NULL,
+            duration_seconds REAL,
+            frame_hashes_json TEXT NOT NULL DEFAULT '[]',
+            status TEXT NOT NULL,
+            error TEXT,
+            generated_at TEXT NOT NULL,
+            PRIMARY KEY (platform, clip_id),
+            FOREIGN KEY (platform, clip_id) REFERENCES clips(platform, clip_id)
+                ON DELETE CASCADE
+        )
+        """
+    )
+    connection.execute("CREATE INDEX media_signature_hash_idx ON media_signatures(file_hash)")
+
+
 MIGRATIONS: dict[int, Migration] = {
     1: _migration_1,
     2: _migration_2,
@@ -246,6 +287,7 @@ MIGRATIONS: dict[int, Migration] = {
     4: _migration_4,
     5: _migration_5,
     6: _migration_6,
+    7: _migration_7,
 }
 
 
@@ -726,6 +768,58 @@ class Catalog:
             "WHERE platform = ? AND clip_id = ? AND provenance = 'model'",
             (platform, clip_id),
         )
+
+    def get_media_signature(self, platform: str, clip_id: str) -> MediaSignature | None:
+        row = self._connection.execute(
+            "SELECT * FROM media_signatures WHERE platform = ? AND clip_id = ?",
+            (platform, clip_id),
+        ).fetchone()
+        if row is None:
+            return None
+        return MediaSignature(
+            platform=row["platform"],
+            clip_id=row["clip_id"],
+            file_hash=row["file_hash"],
+            file_size=row["file_size"],
+            file_mtime_ns=row["file_mtime_ns"],
+            algorithm_version=row["algorithm_version"],
+            duration_seconds=row["duration_seconds"],
+            frame_hashes=tuple(json.loads(row["frame_hashes_json"])),
+            status=row["status"],
+            error=row["error"],
+            generated_at=row["generated_at"],
+        )
+
+    def store_media_signature(self, signature: MediaSignature) -> None:
+        with self._lock, self._connection:
+            self._connection.execute(
+                """
+                INSERT INTO media_signatures VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(platform, clip_id) DO UPDATE SET
+                    file_hash = excluded.file_hash,
+                    file_size = excluded.file_size,
+                    file_mtime_ns = excluded.file_mtime_ns,
+                    algorithm_version = excluded.algorithm_version,
+                    duration_seconds = excluded.duration_seconds,
+                    frame_hashes_json = excluded.frame_hashes_json,
+                    status = excluded.status,
+                    error = excluded.error,
+                    generated_at = excluded.generated_at
+                """,
+                (
+                    signature.platform,
+                    signature.clip_id,
+                    signature.file_hash,
+                    signature.file_size,
+                    signature.file_mtime_ns,
+                    signature.algorithm_version,
+                    signature.duration_seconds,
+                    json.dumps(signature.frame_hashes),
+                    signature.status,
+                    signature.error,
+                    signature.generated_at,
+                ),
+            )
 
 
 def _migrate(connection: sqlite3.Connection) -> None:
