@@ -3,6 +3,9 @@ name: Browser integration
 on:
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 jobs:
   chromium-fixture:
     runs-on: ubuntu-latest
@@ -18,4 +21,4 @@ jobs:
       - name: Install Chromium
         run: playwright install --with-deps chromium
       - name: Exercise real browser collect/download path
-        run: python -m pytest -q -m integration tests/integration
+        run: python -m pytest -q -m integration tests/integration/test_browser_flow.py

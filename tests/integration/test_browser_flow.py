@@ -11,6 +11,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import pytest
 from playwright.sync_api import sync_playwright
 
+from clipfetch.catalog import Catalog
 from clipfetch.collector import collect
 from clipfetch.downloader import DownloadPool
 from clipfetch.model import Clip, Quality
@@ -112,3 +113,8 @@ def test_real_chromium_collects_and_downloads_local_fixture(tmp_path, fixture_se
     assert [clip.ident for clip in clips] == ["LOCAL1"]
     assert len(results) == 1 and results[0].ok
     assert results[0].path.read_bytes() == _VIDEO
+    with Catalog.open(tmp_path) as catalog:
+        record = catalog.get("fixture", "LOCAL1")
+        assert record is not None
+        assert record.relative_path == results[0].path.name
+        assert record.file_size == len(_VIDEO)
