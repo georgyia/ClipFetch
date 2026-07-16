@@ -9,6 +9,7 @@ from clipfetch.topics import (
     TopicConfig,
     TopicDefinition,
     TopicError,
+    TopicMatcher,
     add_topic,
     assignment_details,
     categorize_library,
@@ -109,11 +110,7 @@ def test_invalid_future_and_legacy_topics_json(tmp_path):
         load_topics(tmp_path)
     path.write_text(
         json.dumps(
-            {
-                "topics": [
-                    {"name": "legacy", "description": "old schema", "examples": ["old"]}
-                ]
-            }
+            {"topics": [{"name": "legacy", "description": "old schema", "examples": ["old"]}]}
         ),
         encoding="utf-8",
     )
@@ -144,13 +141,15 @@ def test_manual_override_survives_reindex_and_can_be_removed(tmp_path):
     categorize_library(tmp_path, FakeEmbedder())
     with Catalog.open(tmp_path) as catalog:
         assignments = catalog.topic_assignments("instagram", "A")
-        assert any(item.topic == "entrepreneurship" and item.provenance == "manual"
-                   for item in assignments)
+        assert any(
+            item.topic == "entrepreneurship" and item.provenance == "manual" for item in assignments
+        )
     categorize_library(tmp_path, FakeEmbedder())
     tag_clip(tmp_path, "A", "entrepreneurship", remove=True)
     with Catalog.open(tmp_path) as catalog:
-        assert not any(item.provenance == "manual" for item in
-                       catalog.topic_assignments("instagram", "A"))
+        assert not any(
+            item.provenance == "manual" for item in catalog.topic_assignments("instagram", "A")
+        )
 
 
 def test_selective_clip_invalidation_and_topic_filter(tmp_path):
@@ -168,3 +167,18 @@ def test_selective_clip_invalidation_and_topic_filter(tmp_path):
     assert [record.clip_id for record in result.clips] == ["A"]
     details = assignment_details(tmp_path, "instagram", "A")
     assert details[0]["description"] and details[0]["provenance"] == "model"
+
+
+def test_feed_topic_matcher_uses_semantics_and_manual_override(tmp_path):
+    from clipfetch.model import Clip
+
+    _config(tmp_path)
+    _library(tmp_path, _record("MANUAL", "movie review"))
+    tag_clip(tmp_path, "MANUAL", "entrepreneurship")
+    matcher = TopicMatcher(tmp_path, FakeEmbedder())
+    startup = Clip("instagram", "NEW", "cdn", caption="startup founder advice")
+    assert "entrepreneurship" in matcher.topics_for(startup)
+    manual = Clip("instagram", "MANUAL", "cdn", caption="movie review")
+    assert matcher.topics_for(manual) == ("entrepreneurship",)
+    empty = Clip("instagram", "EMPTY", "cdn")
+    assert matcher.topics_for(empty) == ()

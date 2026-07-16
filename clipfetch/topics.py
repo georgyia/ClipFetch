@@ -13,7 +13,9 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from clipfetch.catalog import Catalog, CatalogError, TopicAssignment
+from clipfetch.catalog import Catalog, CatalogError, CatalogRecord, TopicAssignment
+from clipfetch.errors import ClipFetchError
+from clipfetch.model import Clip
 from clipfetch.semantic import Embedder, semantic_document, semantic_index
 
 TOPICS_FILE = ".clipfetch/topics.json"
@@ -22,7 +24,7 @@ DEFAULT_THRESHOLD = 0.42
 _NAME = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
 
 
-class TopicError(RuntimeError):
+class TopicError(ClipFetchError):
     """Topic definitions or assignments are invalid/unavailable."""
 
 
@@ -50,6 +52,57 @@ class CategorizeReport:
     categorized: int
     unchanged: int
     uncategorized: int
+
+
+class TopicMatcher:
+    """Evaluate feed candidates against local definitions without persisting URLs."""
+
+    def __init__(self, root: Path, embedder: Embedder) -> None:
+        self.root = root
+        self.embedder = embedder
+        self.config = load_topics(root)
+        self._vectors = _vectors(embedder, [topic.document() for topic in self.config.topics])
+
+    def topics_for(self, clip: Clip) -> tuple[str, ...]:
+        with Catalog.open(self.root) as catalog:
+            manual = {
+                item.topic
+                for item in catalog.topic_assignments(clip.platform, clip.ident)
+                if item.provenance == "manual"
+            }
+        if manual:
+            return tuple(sorted(manual))
+        record = CatalogRecord(
+            platform=clip.platform,
+            clip_id=clip.ident,
+            relative_path="",
+            file_size=0,
+            file_mtime_ns=0,
+            downloaded_at="",
+            source_url=clip.url,
+            author=clip.author,
+            caption=clip.caption,
+            likes=clip.likes,
+            metadata_state="candidate",
+            hashtags=clip.normalized_metadata().hashtags,
+            views=clip.views,
+            comments_count=clip.comments_count,
+            shares=clip.shares,
+            duration_seconds=clip.duration_seconds,
+        )
+        document = semantic_document(record)
+        if not document:
+            return ()
+        vector = _vectors(self.embedder, [document])[0]
+        scores = sorted(
+            (
+                (sum(left * right for left, right in zip(vector, topic_vector)), topic.name)
+                for topic, topic_vector in zip(self.config.topics, self._vectors)
+                if len(topic_vector) == len(vector)
+            ),
+            key=lambda item: (-item[0], item[1]),
+        )
+        return tuple(name for score, name in scores if score >= self.config.threshold)[:3]
 
 
 STARTER_TOPICS = (

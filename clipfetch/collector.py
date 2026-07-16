@@ -10,17 +10,30 @@ continues.
 from __future__ import annotations
 
 import time
+from collections import Counter
+from dataclasses import dataclass, field
 from typing import Callable
 
 from playwright.sync_api import BrowserContext, Page, Response
 
 from clipfetch.errors import ExtractionError, NotLoggedInError
+from clipfetch.library import FilterDecision
 from clipfetch.model import Clip, Quality
 from clipfetch.platforms.base import Platform
 
 _SCROLL_PAUSE_S = 0.6
 _MAX_JSON_BYTES = 8 * 1024 * 1024
 _DEFAULT_STALL_TIMEOUT_S = 45
+
+
+@dataclass
+class SelectionStats:
+    scanned: int = 0
+    accepted: int = 0
+    rejected: int = 0
+    unknown_required_metadata: int = 0
+    rejected_by: Counter[str] = field(default_factory=Counter)
+    stopped_by_scan_limit: bool = False
 
 
 class ClipCollector:
@@ -40,6 +53,9 @@ class ClipCollector:
         on_clip: Callable[[Clip], None],
         active: Callable[[], bool] | None = None,
         already_have: set[str] | None = None,
+        scan_limit: int | None = None,
+        selector: Callable[[Clip], FilterDecision] | None = None,
+        stats: SelectionStats | None = None,
     ) -> None:
         self._platform = platform
         self._quality = quality
@@ -47,11 +63,17 @@ class ClipCollector:
         self._on_clip = on_clip
         self._active = active or (lambda: True)
         self._seen: set[str] = set(already_have or ())
+        self._scan_limit = scan_limit or limit
+        self._selector = selector
+        self.stats = stats or SelectionStats()
         self.clips: list[Clip] = []
 
     @property
     def full(self) -> bool:
-        return len(self.clips) >= self._limit
+        reached_scan_limit = self.stats.scanned >= self._scan_limit
+        if reached_scan_limit and len(self.clips) < self._limit:
+            self.stats.stopped_by_scan_limit = True
+        return len(self.clips) >= self._limit or reached_scan_limit
 
     def handle_response(self, response: Response) -> None:
         if self.full or not self._active() or not self._looks_like_api_json(response):
@@ -66,7 +88,15 @@ class ClipCollector:
             if clip.ident in self._seen:
                 continue
             self._seen.add(clip.ident)
+            self.stats.scanned += 1
+            decision = self._selector(clip) if self._selector else FilterDecision(True, False)
+            if not decision.matches:
+                self.stats.rejected += 1
+                self.stats.unknown_required_metadata += int(decision.unknown_required_metadata)
+                self.stats.rejected_by.update(decision.rejected_by)
+                continue
             self.clips.append(clip)
+            self.stats.accepted += 1
             self._on_clip(clip)
 
     def _looks_like_api_json(self, response: Response) -> bool:
@@ -103,6 +133,9 @@ def collect(
     target: str | None = None,
     already_have: set[str] | None = None,
     stall_timeout_s: float = _DEFAULT_STALL_TIMEOUT_S,
+    scan_limit: int | None = None,
+    selector: Callable[[Clip], FilterDecision] | None = None,
+    selection_stats: SelectionStats | None = None,
 ) -> list[Clip]:
     """Scroll ``platform``'s feed until ``count`` unique clips are collected.
 
@@ -112,14 +145,46 @@ def collect(
     """
     # Account (@user) mode may need a bespoke strategy; let the platform take
     # over if it provides one, otherwise fall through to feed scrolling.
+    effective_scan_limit = scan_limit or count
+    stats = selection_stats or SelectionStats()
     if target:
-        clips = platform.collect_target(
-            context, target, quality, count, on_clip, already_have or set()
-        )
+        accepted: list[Clip] = []
+
+        class EnoughAccepted(Exception):
+            pass
+
+        def select_target(clip: Clip) -> None:
+            stats.scanned += 1
+            decision = selector(clip) if selector else FilterDecision(True, False)
+            if decision.matches:
+                accepted.append(clip)
+                stats.accepted += 1
+                on_clip(clip)
+                if len(accepted) >= count:
+                    raise EnoughAccepted
+            else:
+                stats.rejected += 1
+                stats.unknown_required_metadata += int(decision.unknown_required_metadata)
+                stats.rejected_by.update(decision.rejected_by)
+
+        try:
+            clips = platform.collect_target(
+                context,
+                target,
+                quality,
+                effective_scan_limit,
+                select_target,
+                already_have or set(),
+            )
+        except EnoughAccepted:
+            clips = accepted
         if clips is not None:
+            stats.stopped_by_scan_limit = (
+                len(accepted) < count and stats.scanned >= effective_scan_limit
+            )
             if on_progress:
-                on_progress(len(clips))
-            return clips
+                on_progress(len(accepted))
+            return accepted
 
     # The page must exist before the collector so the response handler's
     # ``active`` check can read its URL the moment navigation starts firing.
@@ -131,6 +196,9 @@ def collect(
         on_clip,
         active=lambda: platform.is_on_feed(_current_url(page), target),
         already_have=already_have,
+        scan_limit=effective_scan_limit,
+        selector=selector,
+        stats=stats,
     )
     page.on("response", collector.handle_response)
     page.goto(platform.feed_url(target), wait_until="domcontentloaded")
@@ -158,8 +226,9 @@ def collect(
         page.wait_for_timeout(int(_SCROLL_PAUSE_S * 1000))
 
         found = len(collector.clips)
-        if found > last_progress:
-            last_progress = found
+        scanned = collector.stats.scanned
+        if scanned > last_progress:
+            last_progress = scanned
             last_new_clip_at = time.monotonic()
             if on_progress:
                 on_progress(found)

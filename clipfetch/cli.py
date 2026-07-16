@@ -10,6 +10,7 @@ from pathlib import Path
 
 from clipfetch import __version__, platforms
 from clipfetch.errors import ClipFetchError
+from clipfetch.library import ClipFilter, evaluate_filter, parse_magnitude
 from clipfetch.model import Quality
 from clipfetch.platforms.base import Platform
 from clipfetch.ui import Console
@@ -31,6 +32,8 @@ class Options:
     dry_run: bool
     import_cookies: str | None
     metadata: bool
+    filters: ClipFilter
+    scan_limit: int
 
 
 def _positive_int(value: str) -> int:
@@ -51,6 +54,13 @@ def _nonnegative_int(value: str) -> int:
     if number < 0:
         raise argparse.ArgumentTypeError("must be at least 0")
     return number
+
+
+def _magnitude(value: str) -> int:
+    try:
+        return parse_magnitude(value)
+    except ValueError as err:
+        raise argparse.ArgumentTypeError(str(err)) from err
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -111,6 +121,22 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="save normalized platform metadata as schema-v2 JSON next to each clip",
     )
+    parser.add_argument("--min-likes", type=_magnitude, help="accept clips at/above this count")
+    parser.add_argument("--max-likes", type=_magnitude, help="accept clips at/below this count")
+    parser.add_argument("--min-views", type=_magnitude, help="accept clips at/above this count")
+    parser.add_argument("--max-views", type=_magnitude, help="accept clips at/below this count")
+    parser.add_argument(
+        "--author", action="append", default=[], help="accepted author (repeatable)"
+    )
+    parser.add_argument(
+        "--hashtag", action="append", default=[], help="required hashtag (repeatable)"
+    )
+    parser.add_argument("--topic", action="append", default=[], help="local topic (repeatable)")
+    parser.add_argument(
+        "--scan-limit",
+        type=_positive_int,
+        help="maximum unique feed candidates (default: max(100, COUNT*10))",
+    )
     parser.add_argument(
         "--headed",
         action="store_true",
@@ -156,6 +182,17 @@ def parse_args(argv: list[str] | None = None) -> Options:
         dry_run=args.dry_run,
         import_cookies=args.import_cookies,
         metadata=args.metadata,
+        filters=ClipFilter(
+            min_likes=args.min_likes,
+            max_likes=args.max_likes,
+            min_views=args.min_views,
+            max_views=args.max_views,
+            authors=tuple(args.author),
+            hashtags=tuple(args.hashtag),
+            platforms=(platform.key,),
+            topics=tuple(args.topic),
+        ),
+        scan_limit=args.scan_limit or max(100, count * 10),
     )
 
 
@@ -704,12 +741,71 @@ def _cookie_importer(opts: Options, platform: Platform, console: Console):
     return prepare
 
 
+def _selection_for(opts: Options):
+    """Build a side-effect-free feed-candidate selector."""
+    from clipfetch.catalog import CatalogRecord
+
+    topic_matcher = None
+    if opts.filters.topics:
+        from clipfetch.semantic import FastEmbedder
+        from clipfetch.topics import TopicMatcher
+
+        topic_matcher = TopicMatcher(opts.out, FastEmbedder())
+
+    def select(clip):
+        record = CatalogRecord(
+            platform=clip.platform,
+            clip_id=clip.ident,
+            relative_path="",
+            file_size=0,
+            file_mtime_ns=0,
+            downloaded_at="",
+            source_url=clip.url,
+            author=clip.author,
+            caption=clip.caption,
+            likes=clip.likes,
+            metadata_state="candidate",
+            hashtags=clip.normalized_metadata().hashtags,
+            views=clip.views,
+            comments_count=clip.comments_count,
+            shares=clip.shares,
+            duration_seconds=clip.duration_seconds,
+        )
+        topics = topic_matcher.topics_for(clip) if topic_matcher else ()
+        return evaluate_filter(record, opts.filters, topics)
+
+    return select
+
+
+def _selection_summary(stats, console: Console) -> None:
+    rejected = (
+        ", ".join(f"{name}={count}" for name, count in sorted(stats.rejected_by.items())) or "none"
+    )
+    reason = " (scan limit reached)" if stats.stopped_by_scan_limit else ""
+    console.info(
+        f"Selection: {stats.scanned} scanned, {stats.accepted} accepted, "
+        f"{stats.rejected} rejected [{rejected}], "
+        f"{stats.unknown_required_metadata} unknown-required{reason}."
+    )
+
+
+def _has_selection_filters(filters: ClipFilter) -> bool:
+    return (
+        filters.min_likes is not None
+        or filters.max_likes is not None
+        or filters.min_views is not None
+        or filters.max_views is not None
+        or bool(filters.authors or filters.hashtags or filters.topics)
+    )
+
+
 def _run(opts: Options, console: Console) -> None:
     """Collect clips from the feed and download them as they are found."""
     import time
 
     # Imported lazily so --help and unit tests never need the browser stack.
     from clipfetch import collector, session
+    from clipfetch.collector import SelectionStats
     from clipfetch.downloader import DownloadPool, existing_idents
     from clipfetch.errors import DownloadError
     from clipfetch.ui import MultiProgress, Spinner, human_size
@@ -720,6 +816,8 @@ def _run(opts: Options, console: Console) -> None:
     console.info(f"Source: {source}")
 
     prepare = _cookie_importer(opts, platform, console)
+    selector = _selection_for(opts)
+    selection_stats = SelectionStats()
     if platform.experimental and not opts.dry_run:
         console.info(
             f"{platform.label} support is experimental — extraction is reliable, "
@@ -739,10 +837,14 @@ def _run(opts: Options, console: Console) -> None:
                     on_clip=lambda clip: None,
                     target=opts.target,
                     on_progress=lambda n: spinner.update(f"Collecting {noun}s… {n}/{opts.count}"),
+                    scan_limit=opts.scan_limit,
+                    selector=selector,
+                    selection_stats=selection_stats,
                 )
         console.success(f"Collected {len(found)} of {opts.count} {noun}(s).")
         for clip in found:
             console.print(f"  {clip.ident}  {clip.video_url}")
+        _selection_summary(selection_stats, console)
         return
 
     opts.out.mkdir(parents=True, exist_ok=True)
@@ -767,6 +869,9 @@ def _run(opts: Options, console: Console) -> None:
                     target=opts.target,
                     already_have=already_have,
                     on_progress=lambda n: spinner.update(f"Collecting {noun}s… {n}/{opts.count}"),
+                    scan_limit=opts.scan_limit,
+                    selector=selector,
+                    selection_stats=selection_stats,
                 )
             console.info(f"Downloading {len(found)} {noun}(s) through the browser…")
             results = browser_download.download_all(
@@ -794,13 +899,22 @@ def _run(opts: Options, console: Console) -> None:
                     on_progress=lambda n: progress.set_status(
                         f"Collecting {noun}s… {n}/{opts.count}"
                     ),
+                    scan_limit=opts.scan_limit,
+                    selector=selector,
+                    selection_stats=selection_stats,
                 )
                 progress.set_status("Feed done — finishing downloads…")
                 results = pool.wait()
                 progress.set_status("")
     elapsed = time.monotonic() - started
+    _selection_summary(selection_stats, console)
 
     downloaded = [r for r in results if r.ok]
+    failed_count = sum(not result.ok for result in results)
+    console.info(
+        f"Outcome: {selection_stats.accepted} accepted, "
+        f"{len(downloaded)} downloaded, {failed_count} failed."
+    )
     total_bytes = sum(r.size for r in downloaded)
     for result in results:
         if not result.ok:
@@ -811,6 +925,9 @@ def _run(opts: Options, console: Console) -> None:
                 f"The video is safe; retry with 'clipfetch library index {opts.out}'."
             )
     if not downloaded:
+        if selection_stats.accepted == 0 and _has_selection_filters(opts.filters):
+            console.info("No feed candidates matched the requested filters.")
+            return
         if platform.experimental:
             raise DownloadError(
                 f"No {noun}s could be downloaded — {platform.label} blocked the "

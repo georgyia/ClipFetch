@@ -87,6 +87,7 @@ clipfetch library collection save reels viral-founders --min-likes 1m \
 clipfetch watch reels --collection viral-founders --shuffle
 clipfetch library export reels --collection viral-founders --format m3u
 clipfetch library export reels --collection viral-founders --format json
+clipfetch -reels 25 --min-likes 1m --topic entrepreneurship --scan-limit 250
 clipfetch --help                     # all options
 ```
 
@@ -136,6 +137,12 @@ Saved collections persist filter definitions—not video paths—so membership s
 the catalog changes. The same filters drive collection show, filtered playback, portable M3U
 playlists, and stable JSON manifests. Exports reference relative paths and never copy or
 modify video files.
+
+Download filters run before submission to the downloader. `COUNT` is the number of accepted
+clips to attempt; `--scan-limit` bounds unique feed candidates (default `max(100, COUNT*10)`).
+The summary reports scanned, accepted, rejected-by-predicate, and unknown-required-metadata
+counts. Topic selection uses the same local definitions/model and never stores rejected CDN
+URLs. `--dry-run` prints accepted candidates only.
 
 Firefox import needs no extra package. Modern Windows Chrome encryption additionally
 requires `pip install "clipfetch[cookies]"`; Safari may require granting the terminal

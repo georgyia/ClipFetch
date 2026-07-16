@@ -44,6 +44,29 @@ def test_metadata_flag():
     assert not parse_args(["-reels", "5"]).metadata
 
 
+def test_download_filters_and_default_scan_limit():
+    opts = parse_args(
+        [
+            "-reels",
+            "25",
+            "--min-likes",
+            "1m",
+            "--author",
+            "nasa",
+            "--author",
+            "spacex",
+            "--topic",
+            "entrepreneurship",
+        ]
+    )
+    assert opts.filters.min_likes == 1_000_000
+    assert opts.filters.authors == ("nasa", "spacex")
+    assert opts.filters.topics == ("entrepreneurship",)
+    assert opts.scan_limit == 250
+    assert parse_args(["-reels", "3"]).scan_limit == 100
+    assert parse_args(["-reels", "3", "--scan-limit", "7"]).scan_limit == 7
+
+
 @pytest.mark.parametrize("browser", ["chrome", "firefox", "safari"])
 def test_cookie_import_browser_choices(browser):
     assert parse_args(["-reels", "5", "--import-cookies", browser]).import_cookies == browser

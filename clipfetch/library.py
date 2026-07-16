@@ -10,8 +10,12 @@ from typing import Any
 
 from clipfetch.catalog import Catalog, CatalogError, CatalogRecord
 
-_MULTIPLIERS = {"": Decimal(1), "k": Decimal(1_000), "m": Decimal(1_000_000),
-                "b": Decimal(1_000_000_000)}
+_MULTIPLIERS = {
+    "": Decimal(1),
+    "k": Decimal(1_000),
+    "m": Decimal(1_000_000),
+    "b": Decimal(1_000_000_000),
+}
 _MAX_INTEGER = 9_223_372_036_854_775_807
 
 
@@ -37,6 +41,13 @@ class QueryResult:
     matched: int
     excluded: int
     unknown_required_metadata: int
+
+
+@dataclass(frozen=True)
+class FilterDecision:
+    matches: bool
+    unknown_required_metadata: bool
+    rejected_by: tuple[str, ...] = ()
 
 
 def parse_magnitude(value: str) -> int:
@@ -80,9 +91,7 @@ def query_library(
     with Catalog.open(root) as catalog:
         records = [_refresh_presence(root, record) for record in catalog.all()]
         assigned_topics = {
-            (record.platform, record.clip_id): catalog.topic_names(
-                record.platform, record.clip_id
-            )
+            (record.platform, record.clip_id): catalog.topic_names(record.platform, record.clip_id)
             for record in records
         }
     matched: list[CatalogRecord] = []
@@ -97,7 +106,7 @@ def query_library(
             unknown_count += int(unknown)
     ordered = _sort_records(matched, sort)
     start = min(offset, len(ordered))
-    selected = ordered[start:] if limit is None else ordered[start:start + limit]
+    selected = ordered[start:] if limit is None else ordered[start : start + limit]
     return QueryResult(
         clips=tuple(selected),
         matched=len(matched),
@@ -112,52 +121,66 @@ def matches_filter(
     assigned_topics: tuple[str, ...] = (),
 ) -> tuple[bool, bool]:
     """Return ``(matches, excluded_because_required_value_unknown)``."""
-    if not record.available:
-        return False, False
-    unknown = False
+    decision = evaluate_filter(record, filters, assigned_topics)
+    return decision.matches, decision.unknown_required_metadata
 
-    for value, minimum, maximum in (
-        (record.likes, filters.min_likes, filters.max_likes),
-        (record.views, filters.min_views, filters.max_views),
+
+def evaluate_filter(
+    record: CatalogRecord,
+    filters: ClipFilter,
+    assigned_topics: tuple[str, ...] = (),
+) -> FilterDecision:
+    """Evaluate every dimension so selection summaries can explain rejections."""
+    if not record.available:
+        return FilterDecision(False, False, ("unavailable",))
+    unknown = False
+    rejected: list[str] = []
+
+    for name, value, minimum, maximum in (
+        ("likes", record.likes, filters.min_likes, filters.max_likes),
+        ("views", record.views, filters.min_views, filters.max_views),
     ):
         if minimum is not None or maximum is not None:
             if value is None:
                 unknown = True
+                rejected.append(name)
                 continue
             if minimum is not None and value < minimum:
-                return False, unknown
+                rejected.append(name)
             if maximum is not None and value > maximum:
-                return False, unknown
+                rejected.append(name)
 
     if filters.authors:
         if record.author is None:
             unknown = True
+            rejected.append("author")
         elif record.author.casefold() not in {author.casefold() for author in filters.authors}:
-            return False, unknown
+            rejected.append("author")
     if filters.hashtags:
         wanted = {tag.removeprefix("#").casefold() for tag in filters.hashtags}
         if not wanted.intersection(tag.casefold() for tag in record.hashtags):
-            return False, unknown
+            rejected.append("hashtag")
     if filters.platforms and record.platform.casefold() not in {
         platform.casefold() for platform in filters.platforms
     }:
-        return False, unknown
+        rejected.append("platform")
     if filters.topics:
         wanted_topics = {topic.casefold() for topic in filters.topics}
         if not wanted_topics.intersection(topic.casefold() for topic in assigned_topics):
-            return False, unknown
+            rejected.append("topic")
 
     if filters.downloaded_after is not None or filters.downloaded_before is not None:
         downloaded = _record_date(record)
         if downloaded is None:
             unknown = True
+            rejected.append("downloaded-date")
         else:
             if filters.downloaded_after and downloaded < filters.downloaded_after:
-                return False, unknown
+                rejected.append("downloaded-date")
             if filters.downloaded_before and downloaded > filters.downloaded_before:
-                return False, unknown
+                rejected.append("downloaded-date")
 
-    return (not unknown), unknown
+    return FilterDecision(not rejected, unknown, tuple(dict.fromkeys(rejected)))
 
 
 def find_clip(root: Path, clip_id: str) -> CatalogRecord:
@@ -166,9 +189,7 @@ def find_clip(root: Path, clip_id: str) -> CatalogRecord:
         raise CatalogError(f"library directory does not exist: {root.resolve()}")
     with Catalog.open(root) as catalog:
         matches = [
-            _refresh_presence(root, record)
-            for record in catalog.all()
-            if record.clip_id == clip_id
+            _refresh_presence(root, record) for record in catalog.all() if record.clip_id == clip_id
         ]
     if not matches:
         raise CatalogError(f"clip id not found: {clip_id}")

@@ -13,6 +13,7 @@ from pathlib import Path
 from typing import Protocol
 
 from clipfetch.catalog import Catalog, CatalogError, CatalogRecord, EmbeddingRecord
+from clipfetch.errors import ClipFetchError
 from clipfetch.library import ClipFilter, query_library
 
 DEFAULT_MODEL_ID = "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
@@ -21,7 +22,7 @@ DEFAULT_DIMENSION = 384
 DEFAULT_CACHE_DIR = Path.home() / ".cache" / "clipfetch" / "fastembed"
 
 
-class SemanticError(RuntimeError):
+class SemanticError(ClipFetchError):
     """Semantic indexing/search could not produce a trustworthy result."""
 
 
