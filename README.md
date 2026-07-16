@@ -168,6 +168,14 @@ files. Transcript changes invalidate only affected semantic vectors and generate
 manual topic corrections remain intact. Re-run `library semantic-index` and then
 `library categorize` to rebuild only the invalidated generated data.
 
+### Visible text OCR research
+
+Local OCR for titles/subtitles was evaluated but is not shipped. The bounded RapidOCR/ONNX
+spike reached 1.00 precision but only 0.667 recall because it dropped the mixed-script
+Unicode fixture; it also required 313–498 MB of logical dependency files and up to 631 MB
+peak memory. The fixture corpus, macOS/Linux compatibility results, thresholds, and
+reproduction command are in the [visible-text OCR spike report](docs/visible-text-ocr-spike.md).
+
 ### Opt-in Instagram comments
 
 `library enrich comments` is the only workflow that requests comments. It filters the local

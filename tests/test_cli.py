@@ -339,33 +339,6 @@ def test_transcript_enrichment_cli_with_fake_backend(tmp_path, capsys, monkeypat
         assert catalog.get("instagram", "ABC").transcript_text == "spoken startup advice"
 
 
-def test_visible_text_enrichment_cli_with_fake_backend(tmp_path, capsys, monkeypatch):
-    video = tmp_path / "reel_001_ABC.mp4"
-    video.write_bytes(b"video")
-    assert main(["library", "index", str(tmp_path)]) == 0
-
-    class Fake:
-        model_id = "fake/ocr"
-        revision = "v1"
-        sample_policy = "fixture-policy"
-
-        def extract(self, path):
-            from clipfetch.catalog import VisibleTextSegment
-            from clipfetch.visible_text import VisibleTextResult
-
-            segment = VisibleTextSegment(2.0, "visible startup title", 0.98)
-            return VisibleTextResult(segment.text, (segment,), segment.confidence)
-
-    from clipfetch import visible_text
-
-    monkeypatch.setattr(visible_text, "RapidOCRExtractor", Fake)
-    capsys.readouterr()
-    assert main(["library", "enrich", "visible-text", str(tmp_path)]) == 0
-    assert "1 completed" in capsys.readouterr().out
-    with Catalog.open(tmp_path) as catalog:
-        assert catalog.get("instagram", "ABC").visible_text == "visible startup title"
-
-
 def test_comment_enrichment_and_purge_cli_with_fake_browser(tmp_path, capsys, monkeypatch):
     video = tmp_path / "reel_001_ABC.mp4"
     video.write_bytes(b"video")

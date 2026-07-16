@@ -11,7 +11,7 @@ import time
 from pathlib import Path
 from typing import Any
 
-from clipfetch.visible_text import SAMPLE_POLICY, CorruptMedia, RapidOCRExtractor
+from scripts.visible_text_spike import SAMPLE_POLICY, CorruptMedia, RapidOCRSpike
 
 ROOT = Path(__file__).resolve().parents[1]
 FIXTURES = ROOT / "tests/fixtures/visible_text"
@@ -40,7 +40,7 @@ def _distribution_bytes(name: str) -> int:
 def main() -> None:
     manifest = json.loads((FIXTURES / "manifest.json").read_text(encoding="utf-8"))
     started = time.monotonic()
-    extractor = RapidOCRExtractor()
+    extractor = RapidOCRSpike()
     fixture_results: list[dict[str, Any]] = []
     true_positive = false_positive = false_negative = 0
     for fixture in manifest["fixtures"]:
