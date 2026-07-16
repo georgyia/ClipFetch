@@ -163,14 +163,69 @@ def _run_watch(args: list[str], console: Console) -> int:
     from clipfetch.watcher import watch
 
     parser = argparse.ArgumentParser(prog="clipfetch watch")
-    parser.add_argument("dir", nargs="?", default="reels", type=Path,
-                        help="folder of downloaded clips (default: ./reels)")
+    parser.add_argument(
+        "dir",
+        nargs="?",
+        default="reels",
+        type=Path,
+        help="folder of downloaded clips (default: ./reels)",
+    )
     parser.add_argument("--shuffle", action="store_true", help="play in random order")
+    parser.add_argument("--collection")
+    parser.add_argument("--min-likes")
+    parser.add_argument("--max-likes")
+    parser.add_argument("--min-views")
+    parser.add_argument("--max-views")
+    parser.add_argument("--author", action="append", default=[])
+    parser.add_argument("--hashtag", action="append", default=[])
+    parser.add_argument("--platform", action="append", default=[])
+    parser.add_argument("--topic", action="append", default=[])
     try:
         parsed = parser.parse_args(args)
     except SystemExit as exit_:
         return int(exit_.code or 0)
-    return watch(parsed.dir, console, shuffle=parsed.shuffle)
+    direct = any(
+        (
+            parsed.min_likes,
+            parsed.max_likes,
+            parsed.min_views,
+            parsed.max_views,
+            parsed.author,
+            parsed.hashtag,
+            parsed.platform,
+            parsed.topic,
+        )
+    )
+    if parsed.collection and direct:
+        console.error("--collection cannot be combined with direct filters")
+        return 2
+    if not parsed.collection and not direct:
+        return watch(parsed.dir, console, shuffle=parsed.shuffle)
+    from clipfetch.catalog import CatalogError
+    from clipfetch.collections import CollectionError, get_collection
+    from clipfetch.library import ClipFilter, parse_magnitude, query_library
+
+    try:
+        filters = (
+            get_collection(parsed.dir, parsed.collection).filters
+            if parsed.collection
+            else ClipFilter(
+                min_likes=parse_magnitude(parsed.min_likes) if parsed.min_likes else None,
+                max_likes=parse_magnitude(parsed.max_likes) if parsed.max_likes else None,
+                min_views=parse_magnitude(parsed.min_views) if parsed.min_views else None,
+                max_views=parse_magnitude(parsed.max_views) if parsed.max_views else None,
+                authors=tuple(parsed.author),
+                hashtags=tuple(parsed.hashtag),
+                platforms=tuple(parsed.platform),
+                topics=tuple(parsed.topic),
+            )
+        )
+        result = query_library(parsed.dir, filters)
+    except (CatalogError, CollectionError, ValueError) as err:
+        console.error(str(err))
+        return 1
+    videos = [parsed.dir / record.relative_path for record in result.clips]
+    return watch(parsed.dir, console, shuffle=parsed.shuffle, videos=videos)
 
 
 def _run_topics(args: list[str], console: Console) -> int:
@@ -230,6 +285,7 @@ def _run_topics(args: list[str], console: Console) -> int:
 def _run_library(args: list[str], console: Console) -> int:
     """Dispatch catalog maintenance commands without importing browser code."""
     from clipfetch.catalog import CatalogError, index_library
+    from clipfetch.collections import CollectionError
     from clipfetch.library import (
         ClipFilter,
         find_clip,
@@ -272,9 +328,7 @@ def _run_library(args: list[str], console: Console) -> int:
     list_parser.add_argument("--topic", action="append", default=[])
     list_parser.add_argument("--downloaded-after", type=date_value)
     list_parser.add_argument("--downloaded-before", type=date_value)
-    list_parser.add_argument(
-        "--sort", choices=["likes", "views", "date", "author"], default="date"
-    )
+    list_parser.add_argument("--sort", choices=["likes", "views", "date", "author"], default="date")
     list_parser.add_argument("--limit", type=_positive_int)
     list_parser.add_argument("--offset", type=_nonnegative_int, default=0)
     list_parser.add_argument("--json", action="store_true")
@@ -308,6 +362,30 @@ def _run_library(args: list[str], console: Console) -> int:
     tag_parser.add_argument("values", nargs="+", metavar="[DIR] CLIP_ID")
     tag_parser.add_argument("--topic", required=True)
     tag_parser.add_argument("--remove", action="store_true")
+    collection_parser = commands.add_parser("collection", help="manage saved collections")
+    collection_commands = collection_parser.add_subparsers(dest="collection_command", required=True)
+    collection_save = collection_commands.add_parser("save")
+    collection_save.add_argument("values", nargs="+", metavar="[DIR] NAME")
+    collection_save.add_argument("--min-likes", type=magnitude)
+    collection_save.add_argument("--max-likes", type=magnitude)
+    collection_save.add_argument("--min-views", type=magnitude)
+    collection_save.add_argument("--max-views", type=magnitude)
+    collection_save.add_argument("--author", action="append", default=[])
+    collection_save.add_argument("--hashtag", action="append", default=[])
+    collection_save.add_argument("--platform", action="append", default=[])
+    collection_save.add_argument("--topic", action="append", default=[])
+    collection_save.add_argument("--downloaded-after", type=date_value)
+    collection_save.add_argument("--downloaded-before", type=date_value)
+    collection_list = collection_commands.add_parser("list")
+    collection_list.add_argument("dir", nargs="?", default="reels", type=Path)
+    for command in ("show", "delete"):
+        child = collection_commands.add_parser(command)
+        child.add_argument("values", nargs="+", metavar="[DIR] NAME")
+    export_parser = commands.add_parser("export", help="export a dynamic collection")
+    export_parser.add_argument("dir", nargs="?", default="reels", type=Path)
+    export_parser.add_argument("--collection", required=True)
+    export_parser.add_argument("--format", choices=["m3u", "json"], required=True)
+    export_parser.add_argument("--out", type=Path)
     try:
         parsed = parser.parse_args(args)
     except SystemExit as exit_:
@@ -344,9 +422,7 @@ def _run_library(args: list[str], console: Console) -> int:
                 offset=parsed.offset,
             )
             if parsed.json:
-                console.print(
-                    json.dumps(query_to_dict(list_result), ensure_ascii=False, indent=2)
-                )
+                console.print(json.dumps(query_to_dict(list_result), ensure_ascii=False, indent=2))
             else:
                 _print_library_table(list_result.clips, console)
                 console.info(
@@ -457,6 +533,66 @@ def _run_library(args: list[str], console: Console) -> int:
             verb = "Removed" if parsed.remove else "Assigned"
             console.success(f"{verb} topic {parsed.topic} for {clip_id}.")
             return 0
+        if parsed.command == "collection":
+            from clipfetch.collections import (
+                collection_to_dict,
+                delete_collection,
+                get_collection,
+                load_collections,
+                resolve_collection,
+                save_collection,
+            )
+
+            if parsed.collection_command == "list":
+                for item in load_collections(parsed.dir):
+                    console.print(item.name)
+                return 0
+            if len(parsed.values) == 1:
+                root, name = Path("reels"), parsed.values[0]
+            elif len(parsed.values) == 2:
+                root, name = Path(parsed.values[0]), parsed.values[1]
+            else:
+                console.error(f"library collection {parsed.collection_command} expects [DIR] NAME")
+                return 2
+            if parsed.collection_command == "save":
+                filters = ClipFilter(
+                    min_likes=parsed.min_likes,
+                    max_likes=parsed.max_likes,
+                    min_views=parsed.min_views,
+                    max_views=parsed.max_views,
+                    authors=tuple(parsed.author),
+                    hashtags=tuple(parsed.hashtag),
+                    platforms=tuple(parsed.platform),
+                    topics=tuple(parsed.topic),
+                    downloaded_after=parsed.downloaded_after,
+                    downloaded_before=parsed.downloaded_before,
+                )
+                saved = save_collection(root, name, filters)
+                console.success(f"Saved collection {saved.name}.")
+            elif parsed.collection_command == "delete":
+                delete_collection(root, name)
+                console.success(f"Deleted collection {name}.")
+            else:
+                saved = get_collection(root, name)
+                result = resolve_collection(root, name)
+                console.print(json.dumps(collection_to_dict(saved), indent=2))
+                _print_library_table(result.clips, console)
+                console.info(f"{result.matched} current member(s).")
+            return 0
+        if parsed.command == "export":
+            from clipfetch.collections import export_json, export_m3u, resolve_collection
+
+            result = resolve_collection(parsed.dir, parsed.collection)
+            output = (
+                export_json(parsed.dir, result) if parsed.format == "json" else export_m3u(result)
+            )
+            if parsed.out:
+                parsed.out.write_text(output, encoding="utf-8")
+                console.success(f"Exported {len(result.clips)} clip(s) to {parsed.out}.")
+            else:
+                console.stream.write(output)
+                console.stream.flush()
+            return 0
         if len(parsed.values) == 1:
             root, clip_id = Path("reels"), parsed.values[0]
         elif len(parsed.values) == 2:
@@ -479,7 +615,7 @@ def _run_library(args: list[str], console: Console) -> int:
             for key, item in value.items():
                 console.print(f"{key.replace('_', ' ').title()}: {item}")
         return 0
-    except (CatalogError, SemanticError, TopicError) as err:
+    except (CatalogError, CollectionError, SemanticError, TopicError) as err:
         console.error(str(err))
         return 1
 
@@ -515,7 +651,12 @@ def main(argv: list[str] | None = None) -> int:
         return _run_watch(args[1:], console)
 
     if args and args[0] == "library":
-        if "--json" not in args and not any(value in args for value in ("-h", "--help")):
+        machine_export = len(args) > 1 and args[1] == "export" and "--out" not in args
+        if (
+            "--json" not in args
+            and not machine_export
+            and not any(value in args for value in ("-h", "--help"))
+        ):
             console.banner(__version__)
         return _run_library(args[1:], console)
 
@@ -555,9 +696,7 @@ def _cookie_importer(opts: Options, platform: Platform, console: Console):
         try:
             cookies = import_session_cookies(platform, browser)
             context.add_cookies(cookies)
-            console.success(
-                f"Imported {len(cookies)} {platform.label} cookie(s) from {browser}."
-            )
+            console.success(f"Imported {len(cookies)} {platform.label} cookie(s) from {browser}.")
         except CookieImportError as err:
             console.error(f"Cookie import failed: {err}")
             console.info("Falling back to ClipFetch's own sign-in.")
@@ -593,12 +732,13 @@ def _run(opts: Options, console: Console) -> None:
         ) as context:
             with Spinner(console, f"Collecting {noun}s… 0/{opts.count}") as spinner:
                 found = collector.collect(
-                    context, platform, opts.quality, opts.count,
+                    context,
+                    platform,
+                    opts.quality,
+                    opts.count,
                     on_clip=lambda clip: None,
                     target=opts.target,
-                    on_progress=lambda n: spinner.update(
-                        f"Collecting {noun}s… {n}/{opts.count}"
-                    ),
+                    on_progress=lambda n: spinner.update(f"Collecting {noun}s… {n}/{opts.count}"),
                 )
         console.success(f"Collected {len(found)} of {opts.count} {noun}(s).")
         for clip in found:
@@ -619,13 +759,14 @@ def _run(opts: Options, console: Console) -> None:
 
             with Spinner(console, f"Collecting {noun}s… 0/{opts.count}") as spinner:
                 found = collector.collect(
-                    context, platform, opts.quality, opts.count,
+                    context,
+                    platform,
+                    opts.quality,
+                    opts.count,
                     on_clip=lambda clip: None,
                     target=opts.target,
                     already_have=already_have,
-                    on_progress=lambda n: spinner.update(
-                        f"Collecting {noun}s… {n}/{opts.count}"
-                    ),
+                    on_progress=lambda n: spinner.update(f"Collecting {noun}s… {n}/{opts.count}"),
                 )
             console.info(f"Downloading {len(found)} {noun}(s) through the browser…")
             results = browser_download.download_all(
@@ -635,11 +776,18 @@ def _run(opts: Options, console: Console) -> None:
             headers = {"Cookie": session.cookie_header(context, platform)}
             with MultiProgress(console, opts.count, noun=noun) as progress:
                 pool = DownloadPool(
-                    opts.out, noun, opts.workers, progress,
-                    extra_headers=headers, metadata=opts.metadata,
+                    opts.out,
+                    noun,
+                    opts.workers,
+                    progress,
+                    extra_headers=headers,
+                    metadata=opts.metadata,
                 )
                 found = collector.collect(
-                    context, platform, opts.quality, opts.count,
+                    context,
+                    platform,
+                    opts.quality,
+                    opts.count,
                     on_clip=pool.submit,
                     target=opts.target,
                     already_have=already_have,

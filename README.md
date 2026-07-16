@@ -82,6 +82,11 @@ clipfetch topics add reels climate-tech --description "climate technology" \
 clipfetch library categorize reels
 clipfetch library list reels --topic entrepreneurship
 clipfetch library tag reels ABC123 --topic entrepreneurship
+clipfetch library collection save reels viral-founders --min-likes 1m \
+  --topic entrepreneurship
+clipfetch watch reels --collection viral-founders --shuffle
+clipfetch library export reels --collection viral-founders --format m3u
+clipfetch library export reels --collection viral-founders --format json
 clipfetch --help                     # all options
 ```
 
@@ -126,6 +131,11 @@ education, health and fitness, food, travel, entertainment, and news. Definition
 editable through the CLI without retraining a model. Categorization is local, multilingual,
 multi-label, and stores relevance estimates—not factual claims. Manual tags override model
 assignments and survive re-categorization until removed with `library tag ... --remove`.
+
+Saved collections persist filter definitions—not video paths—so membership stays dynamic as
+the catalog changes. The same filters drive collection show, filtered playback, portable M3U
+playlists, and stable JSON manifests. Exports reference relative paths and never copy or
+modify video files.
 
 Firefox import needs no extra package. Modern Windows Chrome encryption additionally
 requires `pip install "clipfetch[cookies]"`; Safari may require granting the terminal

@@ -247,3 +247,41 @@ def test_topics_cli_init_add_manual_tag_and_filter(tmp_path, capsys):
     ) == 0
     result = json.loads(capsys.readouterr().out)
     assert result["matched"] == 1 and result["clips"][0]["id"] == "ABC"
+
+
+def test_collection_cli_save_show_export_and_filtered_watch(tmp_path, capsys, monkeypatch):
+    video = tmp_path / "reel_001_ABC.mp4"
+    video.write_bytes(b"video")
+    video.with_suffix(".json").write_text(
+        json.dumps({"platform": "instagram", "id": "ABC", "likes": 2_000_000}),
+        encoding="utf-8",
+    )
+    assert main(["library", "index", str(tmp_path)]) == 0
+    assert main(
+        [
+            "library",
+            "collection",
+            "save",
+            str(tmp_path),
+            "viral",
+            "--min-likes",
+            "1m",
+        ]
+    ) == 0
+    capsys.readouterr()
+    assert main(
+        ["library", "export", str(tmp_path), "--collection", "viral", "--format", "m3u"]
+    ) == 0
+    assert capsys.readouterr().out == "#EXTM3U\nreel_001_ABC.mp4\n"
+
+    captured = []
+
+    def fake_watch(directory, console, **kwargs):
+        captured.extend(kwargs["videos"])
+        return 0
+
+    from clipfetch import watcher
+
+    monkeypatch.setattr(watcher, "watch", fake_watch)
+    assert main(["watch", str(tmp_path), "--collection", "viral"]) == 0
+    assert captured == [video]

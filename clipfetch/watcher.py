@@ -45,12 +45,14 @@ def watch(
     console: Console,
     shuffle: bool = False,
     runner: Callable[[Path], None] | None = None,
+    videos: list[Path] | None = None,
+    skipped_missing: int = 0,
 ) -> int:
     """Play every video in ``directory`` in turn. Returns a process exit code."""
     if not directory.is_dir():
         console.error(f"Not a folder: {directory}")
         return 1
-    videos = find_videos(directory)
+    videos = find_videos(directory) if videos is None else list(videos)
     if not videos:
         console.error(f"No videos found in {directory}.")
         return 1
@@ -59,6 +61,8 @@ def watch(
 
     run = runner or _default_runner
     console.info(f"Playing {len(videos)} clip(s) from {directory} — close each to advance.")
+    if skipped_missing:
+        console.info(f"Skipped {skipped_missing} missing catalog file(s).")
     for index, path in enumerate(videos, start=1):
         console.dim(f"  [{index}/{len(videos)}] {path.name}")
         run(path)
