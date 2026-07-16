@@ -19,11 +19,19 @@ class _VideoHandler(BaseHTTPRequestHandler):
     """Serves /video/<name> as deterministic bytes; everything else 404s."""
 
     def do_GET(self):
-        if not self.path.startswith(("/video/", "/ignore-range/")):
+        if not self.path.startswith(("/video/", "/ignore-range/", "/truncate/")):
             self.send_error(404)
             return
         body = self.path.rsplit("/", 1)[-1].encode() * 5000
         range_header = self.headers.get("Range")
+        if self.path.startswith("/truncate/") and not range_header:
+            self.send_response(200)
+            self.send_header("Content-Type", "video/mp4")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body[:12345])
+            self.close_connection = True
+            return
         if range_header and self.path.startswith("/video/"):
             start = int(range_header.removeprefix("bytes=").removesuffix("-"))
             if start >= len(body):
@@ -221,6 +229,21 @@ def test_range_ignored_restarts_instead_of_appending(tmp_path, video_server):
     assert result.path.read_bytes() == b"fresh" * 5000
 
 
+def test_complete_partial_is_promoted_after_range_416_size_confirmation(tmp_path, video_server):
+    body = b"complete" * 5000
+    partial = tmp_path / "reel_004_CODE.part"
+    partial.write_bytes(body)
+    progress = _progress()
+    with progress:
+        pool = _pool(tmp_path, progress)
+        pool.submit(_clip("CODE", f"{video_server}/video/complete"))
+        (result,) = pool.wait()
+    assert result.ok
+    assert result.path == tmp_path / "reel_004_CODE.mp4"
+    assert result.path.read_bytes() == body
+    assert not partial.exists()
+
+
 def test_failed_resume_preserves_partial_for_fresh_url_next_run(tmp_path, video_server):
     partial = tmp_path / "reel_001_CODE.part"
     partial.write_bytes(b"keep me")
@@ -232,3 +255,27 @@ def test_failed_resume_preserves_partial_for_fresh_url_next_run(tmp_path, video_
 
     assert not result.ok
     assert partial.read_bytes() == b"keep me"
+
+
+def test_premature_eof_stays_partial_and_resumes_with_fresh_url(tmp_path, video_server):
+    expected = b"fresh" * 5000
+    progress = _progress()
+    with progress:
+        pool = _pool(tmp_path, progress)
+        pool.submit(_clip("CODE", f"{video_server}/truncate/fresh"))
+        (failed,) = pool.wait()
+
+    partial = tmp_path / "reel_001_CODE.part"
+    assert not failed.ok and "partial file was preserved" in failed.error
+    assert partial.exists()
+    assert 0 < partial.stat().st_size < len(expected)
+    assert not (tmp_path / "reel_001_CODE.mp4").exists()
+
+    progress = _progress()
+    with progress:
+        pool = _pool(tmp_path, progress)
+        pool.submit(_clip("CODE", f"{video_server}/video/fresh"))
+        (resumed,) = pool.wait()
+    assert resumed.ok
+    assert resumed.path.read_bytes() == expected
+    assert not partial.exists()

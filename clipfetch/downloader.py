@@ -211,6 +211,11 @@ class DownloadPool:
                     file.write(chunk)
                     received += len(chunk)
                     self._progress.update(index, received, total or None)
+            if total and received != total:
+                raise OSError(
+                    f"download ended at byte {received}, expected {total}; "
+                    "partial file was preserved"
+                )
         return received
 
 
