@@ -1,0 +1,50 @@
+name: Feature request
+description: Suggest an improvement or new capability
+title: "[Feature]: "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Describe the problem first, then the solution. Roadmap-scale streaming-interface ideas belong in the
+        **ClipFetch Watch task** template instead.
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What are you trying to do that ClipFetch makes hard or impossible today?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+      description: What would you like ClipFetch to do?
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: Other approaches you thought about, and why they fall short.
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - CLI / downloads
+        - Catalog / library
+        - Semantic search / topics / collections
+        - Transcripts / comments / duplicates
+        - Cookie import
+        - ClipFetch Watch (streaming interface)
+        - Other
+    validations:
+      required: true
+  - type: checkboxes
+    id: constraints
+    attributes:
+      label: Fit with project principles
+      options:
+        - label: This keeps the base dependency surface minimal (heavy deps stay optional extras).
+        - label: This preserves local-first / no-telemetry behavior.

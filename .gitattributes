@@ -1,0 +1,19 @@
+# Normalize line endings: text files are LF in the repo, native on checkout.
+* text=auto eol=lf
+
+# Windows-specific scripts stay CRLF.
+*.bat text eol=crlf
+*.cmd text eol=crlf
+
+# Treat binary assets as binary (no line-ending or diff munging).
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.webp binary
+*.avif binary
+*.ico binary
+*.mp4 binary
+*.mov binary
+*.webm binary
+*.sqlite3 binary

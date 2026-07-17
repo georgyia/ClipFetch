@@ -17,3 +17,5 @@ reels/
 
 # OS
 .DS_Store
+
+.issue-drafts/

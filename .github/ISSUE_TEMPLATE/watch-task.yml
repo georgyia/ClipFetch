@@ -1,0 +1,43 @@
+name: ClipFetch Watch task
+description: A roadmap task for the local-first streaming interface
+title: "[Watch]: "
+labels: ["clipfetch-watch", "enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Use this for work tracked against the
+        [ClipFetch Watch plan](https://github.com/georgyia/ClipFetch/blob/main/docs/clipfetch-watch-plan.md)
+        and the [roadmap](https://github.com/georgyia/ClipFetch/blob/main/docs/ROADMAP.md).
+  - type: input
+    id: phase
+    attributes:
+      label: Plan phase / section
+      placeholder: "Phase 2 — Read-only API; §10.6 media endpoint"
+    validations:
+      required: true
+  - type: textarea
+    id: deliverable
+    attributes:
+      label: Deliverable
+      description: What this task produces.
+    validations:
+      required: true
+  - type: textarea
+    id: exit
+    attributes:
+      label: Exit criteria
+      description: How we will know it is done (behavior, tests, docs).
+    validations:
+      required: true
+  - type: checkboxes
+    id: gates
+    attributes:
+      label: Definition of done
+      options:
+        - label: Requested behavior is implemented.
+        - label: Tests appropriate to the change pass (Python 3.9 green where Python is touched).
+        - label: Frontend typecheck/build/tests pass where the frontend is touched.
+        - label: No secrets, absolute paths, or expiring URLs leak.
+        - label: Documentation / API schema updated.
+        - label: The change is focused enough to revert independently.
