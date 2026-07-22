@@ -20,6 +20,9 @@ from clipfetch.collections import (
     load_collections,
     save_collection,
 )
+from clipfetch.collections import (
+    update_collection as _update_collection,
+)
 from clipfetch.contracts import ClipPage
 from clipfetch.library import ClipFilter, query_library
 from clipfetch.services.catalog_service import DEFAULT_LIMIT, list_clips
@@ -59,6 +62,12 @@ def get_collection_summary(root: Path, name: str) -> CollectionSummary:
 def create_collection(root: Path, name: str, filters: ClipFilter) -> CollectionSummary:
     """Save a new collection through the shared validators and return its summary."""
     saved = save_collection(root, name, filters)
+    return _summary(root, saved.name, saved.filters)
+
+
+def update_collection(root: Path, name: str, filters: ClipFilter) -> CollectionSummary:
+    """Replace a saved collection's filter definition and return its updated summary."""
+    saved = _update_collection(root, name, filters)
     return _summary(root, saved.name, saved.filters)
 
 

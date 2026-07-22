@@ -1,3 +1,4 @@
+import { Link } from "react-router-dom";
 import { useBootstrap } from "../api/queries";
 import { EmptyState } from "../components/EmptyState";
 import { ErrorState } from "../components/ErrorState";
@@ -31,6 +32,9 @@ export function LibraryPage() {
   return (
     <section aria-label="Libraries">
       <h1>Library</h1>
+      <p>
+        <Link to="/collections">Manage collections →</Link>
+      </p>
       <ul>
         {data.libraries.map((library) => (
           <li key={library.id}>
