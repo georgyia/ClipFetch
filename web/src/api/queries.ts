@@ -12,6 +12,7 @@ import type {
   ClipPage,
   HomeResponse,
   PlaybackView,
+  SearchResponse,
   TopicSummary,
 } from "./types";
 
@@ -97,6 +98,24 @@ export function useToggleFavorite() {
       queryClient.invalidateQueries({ queryKey: ["favorites"] });
       queryClient.invalidateQueries({ queryKey: ["home"] });
     },
+  });
+}
+
+/** Cursor-paginated search. Disabled until there is a non-empty query. */
+export function useSearch(query: string, mode: string) {
+  const trimmed = query.trim();
+  return useInfiniteQuery({
+    queryKey: ["search", trimmed, mode],
+    queryFn: ({ pageParam }) => {
+      const params = new URLSearchParams({ q: trimmed, mode, limit: "24" });
+      if (pageParam) {
+        params.set("cursor", pageParam);
+      }
+      return apiGet<SearchResponse>(`/api/v1/search?${params.toString()}`);
+    },
+    initialPageParam: null as string | null,
+    getNextPageParam: (last) => last.next_cursor,
+    enabled: trimmed.length > 0,
   });
 }
 

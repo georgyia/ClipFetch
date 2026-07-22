@@ -84,9 +84,12 @@ export interface CollectionSummary {
   clip_count: number;
 }
 
-export interface SearchResult extends ClipPage {
+export interface SearchResponse {
   query: string;
   requested_mode: string;
+  items: ClipSummary[];
+  next_cursor: string | null;
+  total_matched: number;
   mode_used: string;
   semantic_available: boolean;
 }
