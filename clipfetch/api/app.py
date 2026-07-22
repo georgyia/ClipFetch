@@ -25,6 +25,7 @@ from clipfetch.api.routes import (
     home,
     libraries,
     media,
+    search,
     topics,
 )
 from clipfetch.appstate import AppState
@@ -80,4 +81,5 @@ def create_app(appstate: AppState | None = None) -> FastAPI:
     app.include_router(collections.router)
     app.include_router(home.router)
     app.include_router(media.router)
+    app.include_router(search.router)
     return app
