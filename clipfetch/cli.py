@@ -1006,6 +1006,7 @@ def _run(opts: Options, console: Console) -> None:
     from clipfetch.collector import SelectionStats
     from clipfetch.downloader import DownloadPool, existing_idents
     from clipfetch.errors import DownloadError
+    from clipfetch.services import download_service
     from clipfetch.ui import MultiProgress, Spinner, human_size
 
     platform = opts.platform
@@ -1107,35 +1108,35 @@ def _run(opts: Options, console: Console) -> None:
     elapsed = time.monotonic() - started
     _selection_summary(selection_stats, console)
 
-    downloaded = [r for r in results if r.ok]
-    failed_count = sum(not result.ok for result in results)
-    console.info(
-        f"Outcome: {selection_stats.accepted} accepted, "
-        f"{len(downloaded)} downloaded, {failed_count} failed."
+    outcome = download_service.summarize(
+        results, requested=opts.count, found=len(found), accepted=selection_stats.accepted
     )
-    total_bytes = sum(r.size for r in downloaded)
-    for result in results:
+    console.info(
+        f"Outcome: {outcome.accepted} accepted, "
+        f"{outcome.downloaded_count} downloaded, {outcome.failed_count} failed."
+    )
+    for result in outcome.results:
         if not result.ok:
-            console.error(f"{result.clip.ident}: {result.error}")
-        elif result.catalog_error:
+            console.error(f"{result.ident}: {result.error}")
+        elif result.catalog_warning:
             console.error(
-                f"Catalog warning for {result.clip.ident}: {result.catalog_error}. "
+                f"Catalog warning for {result.ident}: {result.catalog_warning}. "
                 f"The video is safe; retry with 'clipfetch library index {opts.out}'."
             )
-    if not downloaded:
-        if selection_stats.accepted == 0 and _has_selection_filters(opts.filters):
+    reason = outcome.empty_reason(
+        experimental=platform.experimental,
+        has_filters=_has_selection_filters(opts.filters),
+        platform_label=platform.label,
+        noun=noun,
+    )
+    if reason is not None:
+        if reason.kind == "no_matches":
             console.info("No feed candidates matched the requested filters.")
             return
-        if platform.experimental:
-            raise DownloadError(
-                f"No {noun}s could be downloaded — {platform.label} blocked the "
-                "requests (anti-bot). Extraction still works: try --dry-run to get "
-                "the video URLs."
-            )
-        raise DownloadError(f"No {noun}s could be downloaded.")
+        raise DownloadError(reason.message or f"No {noun}s could be downloaded.")
     if len(found) < opts.count:
         console.info(f"The feed only yielded {len(found)} {noun}s this session.")
     console.success(
-        f"Downloaded {len(downloaded)} {noun}(s) to {opts.out.resolve()} "
-        f"({human_size(total_bytes)} in {elapsed:.0f}s)."
+        f"Downloaded {outcome.downloaded_count} {noun}(s) to {opts.out.resolve()} "
+        f"({human_size(outcome.total_bytes)} in {elapsed:.0f}s)."
     )
