@@ -12,7 +12,7 @@ from typing import Annotated
 from fastapi import Depends, Request
 
 from clipfetch.api.errors import ApiException
-from clipfetch.appstate import AppState
+from clipfetch.appstate import AppState, LibraryEntry
 from clipfetch.services import library_service
 
 
@@ -24,6 +24,21 @@ def get_appstate(request: Request) -> AppState:
 
 
 AppStateDep = Annotated[AppState, Depends(get_appstate)]
+
+
+def get_active_library(appstate: AppStateDep) -> LibraryEntry:
+    entry = appstate.last_opened_library()
+    if entry is None:
+        raise ApiException(
+            409,
+            "no_active_library",
+            "No library is active. Register and activate a library first.",
+            recovery_actions=("activate_library",),
+        )
+    return entry
+
+
+ActiveLibraryDep = Annotated[LibraryEntry, Depends(get_active_library)]
 
 
 def get_active_library_root(appstate: AppStateDep) -> Path:
