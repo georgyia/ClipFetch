@@ -1,0 +1,35 @@
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.poster {
+  aspect-ratio: 9 / 16;
+  border-radius: var(--radius-card);
+  background: var(--color-surface-hover);
+}
+
+.line {
+  height: 12px;
+  border-radius: var(--radius-small);
+  background: var(--color-surface-hover);
+}
+
+.line.short {
+  width: 60%;
+}
+
+.pulse {
+  animation: pulse 1.6s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.55;
+  }
+}
