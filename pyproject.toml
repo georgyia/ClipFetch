@@ -30,11 +30,12 @@ Issues = "https://github.com/georgyia/ClipFetch/issues"
 clipfetch = "clipfetch.cli:main"
 
 [project.optional-dependencies]
-dev = ["pytest>=7", "ruff>=0.4", "mypy>=1.10"]
+dev = ["pytest>=7", "ruff>=0.4", "mypy>=1.10", "httpx>=0.27"]
 cookies = ["cryptography>=41"]
 semantic = ["fastembed==0.8.0"]
 transcribe = ["faster-whisper==1.2.1"]
 duplicates = ["av>=11"]
+web = ["fastapi>=0.110", "uvicorn[standard]>=0.29"]
 
 [tool.setuptools.dynamic]
 version = { attr = "clipfetch.__version__" }
