@@ -1,6 +1,7 @@
 import { Route, Routes } from "react-router-dom";
 import { ClipDetailPage } from "../pages/ClipDetailPage";
 import { ComingSoon } from "../pages/ComingSoon";
+import { ExplorePage } from "../pages/ExplorePage";
 import { FavoritesPage } from "../pages/FavoritesPage";
 import { HomePage } from "../pages/HomePage";
 import { LibraryPage } from "../pages/LibraryPage";
@@ -14,15 +15,7 @@ export function App() {
     <AppShell>
       <Routes>
         <Route path="/" element={<HomePage />} />
-        <Route
-          path="/explore"
-          element={
-            <ComingSoon
-              title="Explore"
-              description="Filter your library by topic, creator, and popularity. Arriving with the Explore filters work."
-            />
-          }
-        />
+        <Route path="/explore" element={<ExplorePage />} />
         <Route
           path="/search"
           element={
