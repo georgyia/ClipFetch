@@ -4,6 +4,7 @@ import { type ClipDetail, posterUrl } from "../api/types";
 import { Button } from "../components/Button";
 import { ClipRail } from "../components/ClipRail";
 import { ErrorState } from "../components/ErrorState";
+import { FavoriteButton } from "../components/FavoriteButton";
 import { LoadingState } from "../components/LoadingState";
 import { QualityBadge } from "../components/QualityBadge";
 import { TopicChip } from "../components/TopicChip";
@@ -99,6 +100,7 @@ export function ClipDetailPage() {
                 Media unavailable
               </Button>
             )}
+            <FavoriteButton clipId={clip.id} />
           </div>
           {clip.topics.length > 0 ? (
             <div className={styles.chips}>

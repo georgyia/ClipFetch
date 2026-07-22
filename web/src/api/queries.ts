@@ -5,7 +5,7 @@ import {
   useQuery,
   useQueryClient,
 } from "@tanstack/react-query";
-import { apiGet, apiPost, apiPut } from "./client";
+import { apiDelete, apiGet, apiPost, apiPut } from "./client";
 import type {
   Bootstrap,
   ClipDetail,
@@ -63,10 +63,43 @@ export function useClipDetail(clipId: string | undefined) {
   });
 }
 
-/**
- * Cursor-paginated clip list. `buildPath(cursor)` returns the request path for a page; a null cursor
- * requests the first page. Powers topic pages, "see all" rails, and library browsing.
- */
+export function useFavorite(clipId: string | undefined) {
+  return useQuery({
+    queryKey: ["favorite", clipId],
+    queryFn: () =>
+      apiGet<{ favorite: boolean }>(`/api/v1/clips/${encodeURIComponent(clipId ?? "")}/favorite`),
+    enabled: Boolean(clipId),
+  });
+}
+
+/** Toggle a clip's favorite state with an optimistic flip and rollback on failure. */
+export function useToggleFavorite() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ clipId, favorite }: { clipId: string; favorite: boolean }) => {
+      const path = `/api/v1/clips/${encodeURIComponent(clipId)}/favorite`;
+      return favorite ? apiPut<unknown>(path) : apiDelete<unknown>(path);
+    },
+    onMutate: async ({ clipId, favorite }) => {
+      const key = ["favorite", clipId];
+      await queryClient.cancelQueries({ queryKey: key });
+      const previous = queryClient.getQueryData<{ favorite: boolean }>(key);
+      queryClient.setQueryData(key, { favorite });
+      return { key, previous };
+    },
+    onError: (_err, _vars, context) => {
+      if (context) {
+        queryClient.setQueryData(context.key, context.previous);
+      }
+    },
+    onSettled: (_data, _err, { clipId }) => {
+      queryClient.invalidateQueries({ queryKey: ["favorite", clipId] });
+      queryClient.invalidateQueries({ queryKey: ["favorites"] });
+      queryClient.invalidateQueries({ queryKey: ["home"] });
+    },
+  });
+}
+
 export function usePlayback(clipId: string | undefined) {
   return useQuery({
     queryKey: ["playback", clipId],
@@ -99,6 +132,10 @@ export function useSavePlayback() {
   });
 }
 
+/**
+ * Cursor-paginated clip list. `buildPath(cursor)` returns the request path for a page; a null cursor
+ * requests the first page. Powers topic pages, "see all" rails, and library browsing.
+ */
 export function useClipList(
   key: QueryKey,
   buildPath: (cursor: string | null) => string,
