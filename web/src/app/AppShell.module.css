@@ -1,0 +1,143 @@
+.shell {
+  min-height: 100vh;
+  display: grid;
+  grid-template-rows: auto 1fr;
+}
+
+.header {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  gap: var(--space-6);
+  padding: var(--space-4) var(--space-6);
+  background: color-mix(in srgb, var(--color-bg) 86%, transparent);
+  backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--color-border-subtle);
+}
+
+.brand {
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  font: 700 18px / 22px var(--font-sans);
+  color: var(--color-text);
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.brandMark {
+  color: var(--color-accent);
+}
+
+.headerSpacer {
+  flex: 1;
+}
+
+.body {
+  display: grid;
+  grid-template-columns: 1fr;
+}
+
+/* Desktop: a persistent left rail. Mobile: a fixed bottom tab bar. */
+.nav {
+  display: none;
+}
+
+.content {
+  min-width: 0;
+  padding: var(--space-7) var(--space-6) var(--space-12);
+  max-width: 1400px;
+  width: 100%;
+  margin: 0 auto;
+}
+
+.navList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+}
+
+.navLink {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-control);
+  color: var(--color-text-secondary);
+  text-decoration: none;
+  font: var(--text-label);
+}
+
+.navLink:hover {
+  color: var(--color-text);
+  background: var(--color-surface-hover);
+}
+
+.navLinkActive {
+  color: var(--color-text);
+  background: var(--color-surface-raised);
+}
+
+.navIcon {
+  font-size: 18px;
+  line-height: 1;
+}
+
+/* Mobile bottom tabs */
+.tabBar {
+  position: fixed;
+  inset: auto 0 0 0;
+  z-index: 20;
+  display: block;
+  background: color-mix(in srgb, var(--color-bg) 92%, transparent);
+  backdrop-filter: blur(12px);
+  border-top: 1px solid var(--color-border-subtle);
+  padding: var(--space-2) var(--space-3) max(var(--space-2), env(safe-area-inset-bottom));
+}
+
+.tabBar .navList {
+  justify-content: space-around;
+}
+
+.tabBar .navLink {
+  flex-direction: column;
+  gap: var(--space-1);
+  font-size: 10px;
+  padding: var(--space-2) var(--space-3);
+}
+
+.content {
+  padding-bottom: calc(var(--space-12) + 56px);
+}
+
+@media (min-width: 768px) {
+  .body {
+    grid-template-columns: 232px 1fr;
+  }
+
+  .nav {
+    display: block;
+    position: sticky;
+    top: 61px;
+    align-self: start;
+    height: calc(100vh - 61px);
+    padding: var(--space-6) var(--space-4);
+    border-right: 1px solid var(--color-border-subtle);
+  }
+
+  .nav .navList {
+    flex-direction: column;
+    gap: var(--space-2);
+  }
+
+  .tabBar {
+    display: none;
+  }
+
+  .content {
+    padding: var(--space-9) var(--space-9) var(--space-12);
+  }
+}

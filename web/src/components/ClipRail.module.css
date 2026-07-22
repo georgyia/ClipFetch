@@ -1,0 +1,50 @@
+.rail {
+  margin: 0 0 var(--space-9);
+}
+
+.header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-4);
+  margin-bottom: var(--space-4);
+}
+
+.title {
+  margin: 0;
+  font: 650 20px / 24px var(--font-sans);
+  color: var(--color-text);
+}
+
+.seeAll {
+  font: var(--text-label);
+  color: var(--color-text-secondary);
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.seeAll:hover {
+  color: var(--color-text);
+}
+
+.track {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: 150px;
+  gap: var(--space-4);
+  overflow-x: auto;
+  scroll-snap-type: x proximity;
+  padding-bottom: var(--space-3);
+  scrollbar-width: thin;
+}
+
+.track > * {
+  scroll-snap-align: start;
+}
+
+@media (min-width: 768px) {
+  .track {
+    grid-auto-columns: 176px;
+    gap: var(--space-5);
+  }
+}

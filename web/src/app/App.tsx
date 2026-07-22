@@ -1,49 +1,62 @@
 import { Route, Routes } from "react-router-dom";
-import { useBootstrap } from "../api/queries";
-import { PrimaryNav } from "./PrimaryNav";
-
-function Placeholder({ title }: { title: string }) {
-  return <h1>{title}</h1>;
-}
-
-function Home() {
-  const { data, isLoading, isError } = useBootstrap();
-
-  if (isLoading) {
-    return <p role="status">Loading your library…</p>;
-  }
-  if (isError || !data) {
-    return <p role="alert">Could not reach the ClipFetch Watch server.</p>;
-  }
-
-  const count = data.libraries.length;
-  return (
-    <section aria-label="Library status">
-      <h1>Home</h1>
-      <p>
-        ClipFetch Watch v{data.app_version} · {count} librar{count === 1 ? "y" : "ies"} registered
-      </p>
-    </section>
-  );
-}
+import { ClipDetailPage } from "../pages/ClipDetailPage";
+import { ComingSoon } from "../pages/ComingSoon";
+import { FavoritesPage } from "../pages/FavoritesPage";
+import { HomePage } from "../pages/HomePage";
+import { LibraryPage } from "../pages/LibraryPage";
+import { PlayerPage } from "../pages/PlayerPage";
+import { RecentPage } from "../pages/RecentPage";
+import { TopicPage } from "../pages/TopicPage";
+import { AppShell } from "./AppShell";
 
 export function App() {
   return (
-    <div className="app-shell">
-      <a className="skip-link" href="#main">
-        Skip to content
-      </a>
-      <PrimaryNav />
-      <main id="main">
-        <Routes>
-          <Route path="/" element={<Home />} />
-          <Route path="/explore" element={<Placeholder title="Explore" />} />
-          <Route path="/search" element={<Placeholder title="Search" />} />
-          <Route path="/library" element={<Placeholder title="Library" />} />
-          <Route path="/downloads" element={<Placeholder title="Downloads" />} />
-          <Route path="/settings" element={<Placeholder title="Settings" />} />
-        </Routes>
-      </main>
-    </div>
+    <AppShell>
+      <Routes>
+        <Route path="/" element={<HomePage />} />
+        <Route
+          path="/explore"
+          element={
+            <ComingSoon
+              title="Explore"
+              description="Filter your library by topic, creator, and popularity. Arriving with the Explore filters work."
+            />
+          }
+        />
+        <Route
+          path="/search"
+          element={
+            <ComingSoon
+              title="Search"
+              description="Full-text and semantic search across captions, transcripts, and creators."
+            />
+          }
+        />
+        <Route path="/library" element={<LibraryPage />} />
+        <Route path="/library/recent" element={<RecentPage />} />
+        <Route path="/library/favorites" element={<FavoritesPage />} />
+        <Route path="/topics/:slug" element={<TopicPage />} />
+        <Route path="/clip/:id" element={<ClipDetailPage />} />
+        <Route path="/watch/:id" element={<PlayerPage />} />
+        <Route
+          path="/downloads"
+          element={
+            <ComingSoon
+              title="Downloads"
+              description="Queue new clips and watch enrichment progress once the worker lands."
+            />
+          }
+        />
+        <Route
+          path="/settings"
+          element={
+            <ComingSoon
+              title="Settings"
+              description="Capabilities, playback preferences, and diagnostics live here."
+            />
+          }
+        />
+      </Routes>
+    </AppShell>
   );
 }
