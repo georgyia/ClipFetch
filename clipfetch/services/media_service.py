@@ -9,9 +9,12 @@ deterministic neutral placeholder is produced from the clip itself.
 from __future__ import annotations
 
 import hashlib
+from collections.abc import Iterator
 from pathlib import Path
 
 from clipfetch.catalog import CatalogRecord
+
+CHUNK_SIZE = 64 * 1024
 
 # Extensions we are willing to serve, mapped to their media types.
 MEDIA_TYPES = {
@@ -39,6 +42,52 @@ def safe_media_path(root: Path, relative_path: str) -> Path:
 
 def media_type_for(path: Path) -> str:
     return MEDIA_TYPES.get(path.suffix.lower(), "application/octet-stream")
+
+
+def media_etag(size: int, mtime_ns: int) -> str:
+    """A stable strong ETag for a local file, derived from its size and mtime."""
+    return f'"{size:x}-{mtime_ns:x}"'
+
+
+def parse_byte_range(header: str, size: int) -> tuple[int, int] | None:
+    """Parse a single HTTP Range header into an inclusive ``(start, end)``.
+
+    Returns ``None`` for an unsatisfiable or unsupported range (the caller answers ``416``). Only a
+    single range is supported; multi-range requests are treated as unsatisfiable.
+    """
+    if not header.startswith("bytes=") or size <= 0:
+        return None
+    spec = header[len("bytes=") :].strip()
+    if "," in spec or "-" not in spec:
+        return None
+    start_text, _, end_text = spec.partition("-")
+    try:
+        if start_text == "":
+            suffix = int(end_text)
+            if suffix <= 0:
+                return None
+            start, end = max(0, size - suffix), size - 1
+        else:
+            start = int(start_text)
+            end = int(end_text) if end_text else size - 1
+    except ValueError:
+        return None
+    if start < 0 or start >= size or end < start:
+        return None
+    return start, min(end, size - 1)
+
+
+def file_iterator(path: Path, start: int, end: int, chunk: int = CHUNK_SIZE) -> Iterator[bytes]:
+    """Yield ``path`` bytes for the inclusive range ``[start, end]`` without loading it all."""
+    remaining = end - start + 1
+    with path.open("rb") as handle:
+        handle.seek(start)
+        while remaining > 0:
+            data = handle.read(min(chunk, remaining))
+            if not data:
+                break
+            remaining -= len(data)
+            yield data
 
 
 def _poster_label(record: CatalogRecord) -> str:
