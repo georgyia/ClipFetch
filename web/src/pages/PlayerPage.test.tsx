@@ -25,6 +25,9 @@ const QUEUE = {
 };
 
 function jsonFor(url: string) {
+  if (url.includes("/playback")) {
+    return { playback: null };
+  }
   // The list endpoint has no trailing clip id segment.
   if (/\/clips\?/.test(url) || url.endsWith("/clips")) {
     return QUEUE;
@@ -82,4 +85,24 @@ test("queue navigation enables next and disables previous at the head", async ()
   // Next becomes enabled once the recent-clips queue resolves.
   await waitFor(() => expect(screen.getByRole("button", { name: "Next clip" })).toBeEnabled());
   expect(screen.getByRole("button", { name: "Previous clip" })).toBeDisabled();
+});
+
+test("persists playback progress as the clip plays", async () => {
+  const { container } = renderPlayer();
+  const video = container.querySelector("video");
+  if (!video) {
+    throw new Error("video not rendered");
+  }
+  Object.defineProperty(video, "duration", { value: 60, configurable: true });
+  Object.defineProperty(video, "currentTime", { value: 30, configurable: true, writable: true });
+  fireEvent.timeUpdate(video);
+
+  const fetchMock = vi.mocked(globalThis.fetch);
+  await waitFor(() => {
+    const put = fetchMock.mock.calls.find(
+      ([url, init]) => String(url).includes("/playback") && init?.method === "PUT",
+    );
+    expect(put).toBeDefined();
+    expect(JSON.parse(String(put?.[1]?.body))).toMatchObject({ position_ms: 30000 });
+  });
 });

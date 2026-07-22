@@ -91,6 +91,16 @@ export interface SearchResult extends ClipPage {
   semantic_available: boolean;
 }
 
+export interface PlaybackView {
+  clip_id: string;
+  position_ms: number;
+  duration_ms: number | null;
+  completed: boolean;
+  resume_position_ms: number;
+  play_count: number;
+  updated_at: string;
+}
+
 /** Media endpoints are addressed by clip id only; no filesystem paths ever reach the client. */
 export function posterUrl(clipId: string): string {
   return `/api/v1/clips/${encodeURIComponent(clipId)}/poster`;

@@ -5,8 +5,22 @@ import {
   useQuery,
   useQueryClient,
 } from "@tanstack/react-query";
-import { apiGet, apiPost } from "./client";
-import type { Bootstrap, ClipDetail, ClipPage, HomeResponse, TopicSummary } from "./types";
+import { apiGet, apiPost, apiPut } from "./client";
+import type {
+  Bootstrap,
+  ClipDetail,
+  ClipPage,
+  HomeResponse,
+  PlaybackView,
+  TopicSummary,
+} from "./types";
+
+export interface PlaybackWrite {
+  clipId: string;
+  positionMs: number;
+  durationMs?: number | null;
+  completed?: boolean;
+}
 
 export function useBootstrap() {
   return useQuery({
@@ -53,6 +67,38 @@ export function useClipDetail(clipId: string | undefined) {
  * Cursor-paginated clip list. `buildPath(cursor)` returns the request path for a page; a null cursor
  * requests the first page. Powers topic pages, "see all" rails, and library browsing.
  */
+export function usePlayback(clipId: string | undefined) {
+  return useQuery({
+    queryKey: ["playback", clipId],
+    queryFn: () =>
+      apiGet<{ playback: PlaybackView | null }>(
+        `/api/v1/clips/${encodeURIComponent(clipId ?? "")}/playback`,
+      ),
+    enabled: Boolean(clipId),
+    staleTime: Number.POSITIVE_INFINITY,
+  });
+}
+
+/** Persist playback progress, then refresh the home rails so Continue Watching stays current. */
+export function useSavePlayback() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (write: PlaybackWrite) =>
+      apiPut<{ playback: PlaybackView }>(
+        `/api/v1/clips/${encodeURIComponent(write.clipId)}/playback`,
+        {
+          position_ms: Math.round(write.positionMs),
+          duration_ms: write.durationMs == null ? null : Math.round(write.durationMs),
+          completed: write.completed,
+        },
+      ),
+    onSuccess: (_data, variables) => {
+      queryClient.invalidateQueries({ queryKey: ["playback", variables.clipId] });
+      queryClient.invalidateQueries({ queryKey: ["home"] });
+    },
+  });
+}
+
 export function useClipList(
   key: QueryKey,
   buildPath: (cursor: string | null) => string,

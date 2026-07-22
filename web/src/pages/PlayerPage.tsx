@@ -1,9 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { useClipDetail, useClipList } from "../api/queries";
+import { useClipDetail, useClipList, usePlayback, useSavePlayback } from "../api/queries";
 import { mediaUrl } from "../api/types";
 import { formatDuration } from "../lib/format";
 import styles from "./PlayerPage.module.css";
+
+// Persist progress at most this often while playing; also flushed on pause, end, and unmount.
+const SAVE_INTERVAL_MS = 5000;
 
 /**
  * Vertical player MVP. Streams media by clip id (the backend serves byte ranges), with custom
@@ -19,6 +22,8 @@ export function PlayerPage() {
   const videoRef = useRef<HTMLVideoElement>(null);
 
   const { data: clip } = useClipDetail(id);
+  const playback = usePlayback(id);
+  const save = useSavePlayback();
   const queue = useClipList(["clips", "recent"], (cursor) => {
     const params = new URLSearchParams({ limit: "50", sort: "date" });
     if (cursor) {
@@ -40,6 +45,30 @@ export function PlayerPage() {
   const [duration, setDuration] = useState(0);
   const [failed, setFailed] = useState(false);
 
+  // Latest progress in seconds, plus bookkeeping for throttled/idempotent writes.
+  const progressRef = useRef({ position: 0, duration: 0 });
+  const lastSaveRef = useRef(0);
+  const hasResumedRef = useRef(false);
+  const saveMutateRef = useRef(save.mutate);
+  saveMutateRef.current = save.mutate;
+
+  const flushNow = useCallback(
+    (completed?: boolean) => {
+      const { position, duration: dur } = progressRef.current;
+      if (position <= 0 && !completed) {
+        return;
+      }
+      lastSaveRef.current = Date.now();
+      saveMutateRef.current({
+        clipId: id,
+        positionMs: position * 1000,
+        durationMs: dur > 0 ? dur * 1000 : null,
+        completed,
+      });
+    },
+    [id],
+  );
+
   const togglePlay = useCallback(() => {
     setPlaying((prev) => {
       const next = !prev;
@@ -49,11 +78,12 @@ export function PlayerPage() {
           void video.play();
         } else {
           video.pause();
+          flushNow(false);
         }
       }
       return next;
     });
-  }, []);
+  }, [flushNow]);
 
   const seekBy = useCallback((delta: number) => {
     const video = videoRef.current;
@@ -111,12 +141,41 @@ export function PlayerPage() {
     return () => window.removeEventListener("keydown", onKey);
   }, [togglePlay, seekBy, goTo, nextId, prevId, navigate]);
 
-  // Reset transient state when the clip changes.
+  // Reset transient state and per-clip progress bookkeeping when the clip changes.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: id is the intended reset trigger
   useEffect(() => {
     setPlaying(true);
     setFailed(false);
     setCurrent(0);
-  }, []);
+    progressRef.current = { position: 0, duration: 0 };
+    lastSaveRef.current = 0;
+    hasResumedRef.current = false;
+  }, [id]);
+
+  // Resume from the stored position once both metadata and playback state are available.
+  useEffect(() => {
+    const video = videoRef.current;
+    const resumeMs = playback.data?.playback?.resume_position_ms ?? 0;
+    if (video && duration > 0 && resumeMs > 0 && !hasResumedRef.current) {
+      hasResumedRef.current = true;
+      video.currentTime = resumeMs / 1000;
+    }
+  }, [playback.data, duration]);
+
+  // Flush the final position when leaving a clip (navigation or closing the player).
+  useEffect(() => {
+    const clipId = id;
+    return () => {
+      const { position, duration: dur } = progressRef.current;
+      if (position > 0) {
+        saveMutateRef.current({
+          clipId,
+          positionMs: position * 1000,
+          durationMs: dur > 0 ? dur * 1000 : null,
+        });
+      }
+    };
+  }, [id]);
 
   const title = clip?.caption?.trim() || clip?.author || "Now playing";
 
@@ -143,8 +202,23 @@ export function PlayerPage() {
           muted={muted}
           playsInline
           onLoadedMetadata={(event) => setDuration(event.currentTarget.duration || 0)}
-          onTimeUpdate={(event) => setCurrent(event.currentTarget.currentTime)}
-          onEnded={() => (nextId ? goTo(nextId) : setPlaying(false))}
+          onTimeUpdate={(event) => {
+            const video = event.currentTarget;
+            setCurrent(video.currentTime);
+            progressRef.current = { position: video.currentTime, duration: video.duration || 0 };
+            const now = Date.now();
+            if (playing && now - lastSaveRef.current > SAVE_INTERVAL_MS) {
+              flushNow(false);
+            }
+          }}
+          onEnded={() => {
+            flushNow(true);
+            if (nextId) {
+              goTo(nextId);
+            } else {
+              setPlaying(false);
+            }
+          }}
           onError={() => setFailed(true)}
         />
         {failed ? (
