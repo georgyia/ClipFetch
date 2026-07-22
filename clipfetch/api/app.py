@@ -18,6 +18,8 @@ from starlette.responses import Response
 from clipfetch import __version__
 from clipfetch.api.capabilities import capability_matrix
 from clipfetch.api.errors import install_exception_handlers
+from clipfetch.api.routes import bootstrap, libraries
+from clipfetch.appstate import AppState
 
 API_PREFIX = "/api/v1"
 
@@ -34,8 +36,12 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
         return response
 
 
-def create_app() -> FastAPI:
-    """Build the ClipFetch Watch API application."""
+def create_app(appstate: AppState | None = None) -> FastAPI:
+    """Build the ClipFetch Watch API application.
+
+    ``appstate`` may be supplied (tests, custom locations); otherwise the OS-default
+    application-state database is opened lazily.
+    """
     app = FastAPI(
         title="ClipFetch Watch API",
         version=__version__,
@@ -43,6 +49,7 @@ def create_app() -> FastAPI:
         redoc_url=None,
         openapi_url="/api/openapi.json",
     )
+    app.state.appstate = appstate if appstate is not None else AppState.open()
     app.add_middleware(RequestContextMiddleware)
     install_exception_handlers(app)
 
@@ -58,4 +65,6 @@ def create_app() -> FastAPI:
     def capabilities() -> dict[str, Any]:
         return {"capabilities": capability_matrix()}
 
+    app.include_router(bootstrap.router)
+    app.include_router(libraries.router)
     return app
