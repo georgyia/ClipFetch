@@ -2,6 +2,8 @@ import { Route, Routes } from "react-router-dom";
 import { ComingSoon } from "../pages/ComingSoon";
 import { HomePage } from "../pages/HomePage";
 import { LibraryPage } from "../pages/LibraryPage";
+import { RecentPage } from "../pages/RecentPage";
+import { TopicPage } from "../pages/TopicPage";
 import { AppShell } from "./AppShell";
 
 export function App() {
@@ -28,6 +30,8 @@ export function App() {
           }
         />
         <Route path="/library" element={<LibraryPage />} />
+        <Route path="/library/recent" element={<RecentPage />} />
+        <Route path="/topics/:slug" element={<TopicPage />} />
         <Route
           path="/downloads"
           element={

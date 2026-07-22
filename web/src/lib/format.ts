@@ -1,5 +1,14 @@
 // Small presentation helpers shared across cards, rails, and the detail page.
 
+/** Turn a slug like "street-food" into a display title "Street Food". */
+export function titleize(slug: string): string {
+  return slug
+    .split(/[-_\s]+/)
+    .filter(Boolean)
+    .map((part) => part[0].toUpperCase() + part.slice(1))
+    .join(" ");
+}
+
 /** Compact count: 1_234 -> "1.2K", 2_500_000 -> "2.5M". Null/negative render as an empty string. */
 export function compactCount(value: number | null | undefined): string {
   if (value == null || value < 0) {
