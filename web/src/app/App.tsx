@@ -1,4 +1,5 @@
 import { Route, Routes } from "react-router-dom";
+import { ClipDetailPage } from "../pages/ClipDetailPage";
 import { ComingSoon } from "../pages/ComingSoon";
 import { HomePage } from "../pages/HomePage";
 import { LibraryPage } from "../pages/LibraryPage";
@@ -32,6 +33,7 @@ export function App() {
         <Route path="/library" element={<LibraryPage />} />
         <Route path="/library/recent" element={<RecentPage />} />
         <Route path="/topics/:slug" element={<TopicPage />} />
+        <Route path="/clip/:id" element={<ClipDetailPage />} />
         <Route
           path="/downloads"
           element={

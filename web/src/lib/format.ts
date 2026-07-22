@@ -32,6 +32,36 @@ export function compactCount(value: number | null | undefined): string {
   return String(value);
 }
 
+/** Bytes -> a human size like "4.2 MB". Null renders as an empty string. */
+export function formatBytes(bytes: number | null | undefined): string {
+  if (bytes == null || bytes < 0) {
+    return "";
+  }
+  if (bytes < 1024) {
+    return `${bytes} B`;
+  }
+  const units = ["KB", "MB", "GB", "TB"];
+  let value = bytes / 1024;
+  let unit = 0;
+  while (value >= 1024 && unit < units.length - 1) {
+    value /= 1024;
+    unit += 1;
+  }
+  return `${value.toFixed(1)} ${units[unit]}`;
+}
+
+/** ISO timestamp -> a locale date like "Jan 2, 2026". Invalid/null renders as an empty string. */
+export function formatDate(iso: string | null | undefined): string {
+  if (!iso) {
+    return "";
+  }
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) {
+    return "";
+  }
+  return date.toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" });
+}
+
 /** Seconds -> "m:ss" (or "h:mm:ss"). Null renders as an empty string. */
 export function formatDuration(seconds: number | null | undefined): string {
   if (seconds == null || seconds < 0) {

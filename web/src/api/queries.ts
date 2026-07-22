@@ -53,11 +53,16 @@ export function useClipDetail(clipId: string | undefined) {
  * Cursor-paginated clip list. `buildPath(cursor)` returns the request path for a page; a null cursor
  * requests the first page. Powers topic pages, "see all" rails, and library browsing.
  */
-export function useClipList(key: QueryKey, buildPath: (cursor: string | null) => string) {
+export function useClipList(
+  key: QueryKey,
+  buildPath: (cursor: string | null) => string,
+  options: { enabled?: boolean } = {},
+) {
   return useInfiniteQuery({
     queryKey: key,
     queryFn: ({ pageParam }) => apiGet<ClipPage>(buildPath(pageParam)),
     initialPageParam: null as string | null,
     getNextPageParam: (last) => last.next_cursor,
+    enabled: options.enabled ?? true,
   });
 }
