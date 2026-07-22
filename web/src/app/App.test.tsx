@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { render, screen } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import type { ReactElement } from "react";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
@@ -13,11 +13,11 @@ const BOOTSTRAP = {
   worker: { state: "not_configured" },
 };
 
-function renderWithProviders(ui: ReactElement) {
+function renderWithProviders(ui: ReactElement, route = "/") {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <QueryClientProvider client={queryClient}>
-      <MemoryRouter initialEntries={["/"]}>{ui}</MemoryRouter>
+      <MemoryRouter initialEntries={[route]}>{ui}</MemoryRouter>
     </QueryClientProvider>,
   );
 }
@@ -39,13 +39,13 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-test("renders the primary navigation", () => {
+test("renders the primary navigation and brand", () => {
   renderWithProviders(<App />);
-  expect(screen.getByRole("navigation", { name: "Primary" })).toBeInTheDocument();
-  expect(screen.getByRole("link", { name: "Home" })).toBeInTheDocument();
+  const rail = screen.getByRole("navigation", { name: "Primary" });
+  expect(within(rail).getByRole("link", { name: /Home/ })).toBeInTheDocument();
 });
 
-test("shows library status from the bootstrap query", async () => {
+test("prompts to activate a library when none is active", async () => {
   renderWithProviders(<App />);
-  expect(await screen.findByText(/ClipFetch Watch v0\.2\.0/)).toBeInTheDocument();
+  expect(await screen.findByText("No active library")).toBeInTheDocument();
 });
