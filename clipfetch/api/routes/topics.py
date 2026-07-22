@@ -1,8 +1,10 @@
-"""Read-only topic endpoints: list topics, one topic, and a topic's clips."""
+"""Read-only topic endpoints: list topics, one topic, and a topic's clips.
 
-from __future__ import annotations
+FastAPI evaluates these route signatures at runtime, so this module intentionally does not use
+``from __future__ import annotations`` and uses ``Optional[...]`` for Python 3.9 compatibility.
+"""
 
-from typing import Annotated, Any
+from typing import Annotated, Any, Optional
 
 from fastapi import APIRouter, Query
 
@@ -39,7 +41,7 @@ def get_topic(slug: str, root: ActiveLibraryRootDep) -> dict[str, Any]:
 def list_topic_clips(
     slug: str,
     root: ActiveLibraryRootDep,
-    cursor: Annotated[str | None, Query()] = None,
+    cursor: Annotated[Optional[str], Query()] = None,
     limit: Annotated[int, Query(ge=1, le=100)] = 24,
     sort: Annotated[str, Query()] = "date",
 ) -> dict[str, Any]:

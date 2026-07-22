@@ -1,9 +1,11 @@
-"""Read-only clip endpoints: cursor-paginated listing with a filter allowlist, and clip detail."""
+"""Read-only clip endpoints: cursor-paginated listing with a filter allowlist, and clip detail.
 
-from __future__ import annotations
+FastAPI evaluates these route signatures at runtime, so this module intentionally does not use
+``from __future__ import annotations`` and uses ``Optional[...]`` for Python 3.9 compatibility.
+"""
 
 from datetime import date
-from typing import Annotated, Any
+from typing import Annotated, Any, Optional
 
 from fastapi import APIRouter, Query
 
@@ -30,19 +32,19 @@ def _require_sort(sort: str) -> None:
 @router.get("")
 def list_clips(
     root: ActiveLibraryRootDep,
-    cursor: Annotated[str | None, Query()] = None,
+    cursor: Annotated[Optional[str], Query()] = None,
     limit: Annotated[int, Query(ge=1, le=100)] = 24,
     sort: Annotated[str, Query()] = "date",
-    topic: Annotated[list[str] | None, Query()] = None,
-    creator: Annotated[list[str] | None, Query()] = None,
-    hashtag: Annotated[list[str] | None, Query()] = None,
-    platform: Annotated[list[str] | None, Query()] = None,
-    min_likes: Annotated[int | None, Query(ge=0)] = None,
-    max_likes: Annotated[int | None, Query(ge=0)] = None,
-    min_views: Annotated[int | None, Query(ge=0)] = None,
-    max_views: Annotated[int | None, Query(ge=0)] = None,
-    downloaded_after: Annotated[date | None, Query()] = None,
-    downloaded_before: Annotated[date | None, Query()] = None,
+    topic: Annotated[Optional[list[str]], Query()] = None,
+    creator: Annotated[Optional[list[str]], Query()] = None,
+    hashtag: Annotated[Optional[list[str]], Query()] = None,
+    platform: Annotated[Optional[list[str]], Query()] = None,
+    min_likes: Annotated[Optional[int], Query(ge=0)] = None,
+    max_likes: Annotated[Optional[int], Query(ge=0)] = None,
+    min_views: Annotated[Optional[int], Query(ge=0)] = None,
+    max_views: Annotated[Optional[int], Query(ge=0)] = None,
+    downloaded_after: Annotated[Optional[date], Query()] = None,
+    downloaded_before: Annotated[Optional[date], Query()] = None,
 ) -> dict[str, Any]:
     _require_sort(sort)
     filters = ClipFilter(

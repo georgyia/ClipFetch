@@ -1,11 +1,11 @@
 """Read-only collection endpoints: list collections, one collection, and its clips.
 
-Collection creation and deletion are a separate mutation issue; this module is read-only.
+Collection creation and deletion are a separate mutation issue; this module is read-only. FastAPI
+evaluates these route signatures at runtime, so this module intentionally does not use
+``from __future__ import annotations`` and uses ``Optional[...]`` for Python 3.9 compatibility.
 """
 
-from __future__ import annotations
-
-from typing import Annotated, Any
+from typing import Annotated, Any, Optional
 
 from fastapi import APIRouter, Query
 
@@ -41,7 +41,7 @@ def get_collection(collection_id: str, root: ActiveLibraryRootDep) -> dict[str, 
 def list_collection_clips(
     collection_id: str,
     root: ActiveLibraryRootDep,
-    cursor: Annotated[str | None, Query()] = None,
+    cursor: Annotated[Optional[str], Query()] = None,
     limit: Annotated[int, Query(ge=1, le=100)] = 24,
     sort: Annotated[str, Query()] = "date",
 ) -> dict[str, Any]:
