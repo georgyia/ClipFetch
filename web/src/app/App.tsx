@@ -1,5 +1,7 @@
 import { Route, Routes } from "react-router-dom";
 import { ClipDetailPage } from "../pages/ClipDetailPage";
+import { CollectionDetailPage } from "../pages/CollectionDetailPage";
+import { CollectionsPage } from "../pages/CollectionsPage";
 import { ComingSoon } from "../pages/ComingSoon";
 import { ExplorePage } from "../pages/ExplorePage";
 import { FavoritesPage } from "../pages/FavoritesPage";
@@ -22,6 +24,8 @@ export function App() {
         <Route path="/library/recent" element={<RecentPage />} />
         <Route path="/library/favorites" element={<FavoritesPage />} />
         <Route path="/topics/:slug" element={<TopicPage />} />
+        <Route path="/collections" element={<CollectionsPage />} />
+        <Route path="/collections/:id" element={<CollectionDetailPage />} />
         <Route path="/clip/:id" element={<ClipDetailPage />} />
         <Route path="/watch/:id" element={<PlayerPage />} />
         <Route

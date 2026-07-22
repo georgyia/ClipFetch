@@ -76,6 +76,18 @@ def save_collection(root: Path, name: str, filters: ClipFilter) -> SavedCollecti
     return saved
 
 
+def update_collection(root: Path, name: str, filters: ClipFilter) -> SavedCollection:
+    """Replace an existing collection's filter definition atomically. Raises if it is missing."""
+    normalized = normalize_collection_name(name)
+    existing = list(load_collections(root))
+    if not any(item.name == normalized for item in existing):
+        raise CollectionError(f"unknown collection: {normalized}")
+    _validate_topics(root, filters)
+    replaced = SavedCollection(normalized, filters)
+    _write(root, tuple(replaced if item.name == normalized else item for item in existing))
+    return replaced
+
+
 def delete_collection(root: Path, name: str) -> None:
     normalized = normalize_collection_name(name)
     existing = load_collections(root)

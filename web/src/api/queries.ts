@@ -10,11 +10,18 @@ import type {
   Bootstrap,
   ClipDetail,
   ClipPage,
+  CollectionSummary,
   HomeResponse,
   PlaybackView,
   SearchResponse,
   TopicSummary,
 } from "./types";
+
+export interface CollectionFilters {
+  min_likes?: number;
+  topics?: string[];
+  platforms?: string[];
+}
 
 export interface PlaybackWrite {
   clipId: string;
@@ -46,6 +53,50 @@ export function useHome() {
   return useQuery({
     queryKey: ["home"],
     queryFn: () => apiGet<HomeResponse>("/api/v1/home"),
+  });
+}
+
+export function useCollections() {
+  return useQuery({
+    queryKey: ["collections"],
+    queryFn: () => apiGet<{ collections: CollectionSummary[] }>("/api/v1/collections"),
+  });
+}
+
+export function useCreateCollection() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: { name: string; filters: CollectionFilters }) =>
+      apiPost<CollectionSummary>("/api/v1/collections", input),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["collections"] });
+      queryClient.invalidateQueries({ queryKey: ["home"] });
+    },
+  });
+}
+
+export function useUpdateCollection() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: { id: string; filters: CollectionFilters }) =>
+      apiPut<CollectionSummary>(`/api/v1/collections/${encodeURIComponent(input.id)}`, {
+        filters: input.filters,
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["collections"] });
+      queryClient.invalidateQueries({ queryKey: ["home"] });
+    },
+  });
+}
+
+export function useDeleteCollection() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => apiDelete<unknown>(`/api/v1/collections/${encodeURIComponent(id)}`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["collections"] });
+      queryClient.invalidateQueries({ queryKey: ["home"] });
+    },
   });
 }
 
