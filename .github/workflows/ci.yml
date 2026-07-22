@@ -15,7 +15,7 @@ jobs:
           python-version: "3.13"
           cache: pip
       - name: Install (with dev extras)
-        run: pip install -e ".[dev]"
+        run: pip install -e ".[dev,web]"
       - name: Ruff
         run: ruff check .
       - name: Mypy
@@ -37,7 +37,7 @@ jobs:
           python-version: ${{ matrix.python-version }}
           cache: pip
       - name: Install (with dev extras)
-        run: pip install -e ".[dev]"
+        run: pip install -e ".[dev,web]"
       - name: Run tests
         # The suite uses fakes and a local HTTP server, so no browser binary
         # is downloaded — the Playwright package import alone is enough.
