@@ -18,7 +18,7 @@ from starlette.responses import Response
 from clipfetch import __version__
 from clipfetch.api.capabilities import capability_matrix
 from clipfetch.api.errors import install_exception_handlers
-from clipfetch.api.routes import bootstrap, libraries
+from clipfetch.api.routes import bootstrap, clips, collections, libraries, topics
 from clipfetch.appstate import AppState
 
 API_PREFIX = "/api/v1"
@@ -67,4 +67,7 @@ def create_app(appstate: AppState | None = None) -> FastAPI:
 
     app.include_router(bootstrap.router)
     app.include_router(libraries.router)
+    app.include_router(clips.router)
+    app.include_router(topics.router)
+    app.include_router(collections.router)
     return app
