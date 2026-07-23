@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { useClipDetail, useClipList, usePlayback, useSavePlayback } from "../api/queries";
 import { mediaUrl } from "../api/types";
 import { formatDuration } from "../lib/format";
+import { parseQueueSource } from "../lib/queueSource";
 import styles from "./PlayerPage.module.css";
 
 // Persist progress at most this often while playing; also flushed on pause, end, and unmount.
@@ -19,18 +20,16 @@ const SAVE_INTERVAL_MS = 5000;
 export function PlayerPage() {
   const { id = "" } = useParams();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const videoRef = useRef<HTMLVideoElement>(null);
 
   const { data: clip } = useClipDetail(id);
   const playback = usePlayback(id);
   const save = useSavePlayback();
-  const queue = useClipList(["clips", "recent"], (cursor) => {
-    const params = new URLSearchParams({ limit: "50", sort: "date" });
-    if (cursor) {
-      params.set("cursor", cursor);
-    }
-    return `/api/v1/clips?${params.toString()}`;
-  });
+  // The queue follows the context the player was opened with (topic/collection/Explore/search),
+  // falling back to global-recent — so "watch many in this category" stays in that category.
+  const source = parseQueueSource(searchParams);
+  const queue = useClipList(source.key, source.buildPath);
 
   const order = (queue.data?.pages.flatMap((page) => page.items) ?? []).filter(
     (item) => item.available,
@@ -96,10 +95,12 @@ export function PlayerPage() {
   const goTo = useCallback(
     (clipId: string | null) => {
       if (clipId) {
-        navigate(`/watch/${encodeURIComponent(clipId)}`);
+        // Carry the queue context across prev/next so the category isn't lost after one hop.
+        const qs = searchParams.toString();
+        navigate(`/watch/${encodeURIComponent(clipId)}${qs ? `?${qs}` : ""}`);
       }
     },
-    [navigate],
+    [navigate, searchParams],
   );
 
   // Keyboard map. Ignored while a form control has focus.
