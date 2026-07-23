@@ -1,7 +1,14 @@
 # ClipFetch documentation
 
-Deep-dive documentation for ClipFetch and the planned ClipFetch Watch streaming interface. Start with the
+Deep-dive documentation for ClipFetch and the ClipFetch Watch streaming interface. Start with the
 [project README](../README.md) for installation and everyday usage.
+
+## Using ClipFetch Watch
+
+- **[watch-user-guide.md](watch-user-guide.md)** — install, first run, playback and keyboard shortcuts,
+  downloads, privacy, troubleshooting, and data/migration notes for the Watch preview.
+- **[release-checklist.md](release-checklist.md)** — repeatable steps for cutting a release, including the
+  packaged clean-install smoke.
 
 ## Product & roadmap
 

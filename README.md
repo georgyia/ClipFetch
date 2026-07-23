@@ -17,12 +17,13 @@ feed serves you, and downloads them in parallel into a single folder — ready t
 or anywhere without a connection. Then it lets you catalog, search, categorize, and replay that archive like your
 own streaming library.
 
-> **What ships today vs. what's coming.** ClipFetch is a **command-line engine** for building and querying a
-> personal short-video library — it is real and works now. **ClipFetch Watch**, the local-first *streaming
-> interface* that puts a calm, cinematic browsing experience on top of that library, is in active design. Its
-> full product/design/engineering blueprint lives in [docs/clipfetch-watch-plan.md](docs/clipfetch-watch-plan.md)
-> and a short roadmap in [docs/ROADMAP.md](docs/ROADMAP.md). Nothing on this page describes a web UI that already
-> exists — the streaming experience is the north star we are building toward.
+> **What ships today.** ClipFetch is a **command-line engine** for building and querying a personal short-video
+> library — downloading, catalog, search, topics, collections, and more. **ClipFetch Watch**, the local-first
+> *streaming interface* on top of that library, is now runnable as a **preview**: start it with `clipfetch web`
+> and browse, search, and watch your library in a calm, cinematic UI. The one part still to come is automated
+> downloading from *inside* Watch — for now you add clips with the CLI. See the
+> [user guide](docs/watch-user-guide.md), the [blueprint](docs/clipfetch-watch-plan.md), and the
+> [roadmap](docs/ROADMAP.md).
 
 ---
 
@@ -309,11 +310,29 @@ Architecturally it reuses everything ClipFetch already does — the catalog, fil
 search, transcripts, and duplicate detection become the content engine beneath a FastAPI `/api/v1` service, a
 React + TypeScript frontend, and a background worker.
 
-📄 **Read the full blueprint:** [docs/clipfetch-watch-plan.md](docs/clipfetch-watch-plan.md) ·
-🗺️ **Short roadmap:** [docs/ROADMAP.md](docs/ROADMAP.md)
+### Try the preview
 
-*ClipFetch Watch is a working product name and is not yet implemented. "Netflix for Reels" describes the browsing
-quality we're aiming for, not a Netflix clone or any affiliation with Netflix.*
+Watch is now runnable. It streams a library you built with the CLI — Home rails, Explore, search, collections,
+favorites, continue-watching, a vertical player, and quality tiers all work:
+
+```bash
+pip install -e ".[web]"        # FastAPI + Uvicorn
+npm --prefix web ci && npm --prefix web run build   # build the UI into the package
+clipfetch web                  # serves http://127.0.0.1:8000 and opens your browser
+```
+
+Point it at a library once via the built-in API docs (`/api/docs`), then browse. The one thing still to come is
+an **in-app download source**: the job queue and worker are real, but the live browser-driven downloader is not
+wired into Watch yet, so keep using the CLI to add clips. `clipfetch web --demo` runs the full job pipeline with
+an offline fake source. Full walkthrough: **[docs/watch-user-guide.md](docs/watch-user-guide.md)**.
+
+📄 **Read the full blueprint:** [docs/clipfetch-watch-plan.md](docs/clipfetch-watch-plan.md) ·
+🗺️ **Short roadmap:** [docs/ROADMAP.md](docs/ROADMAP.md) ·
+📖 **User guide:** [docs/watch-user-guide.md](docs/watch-user-guide.md)
+
+*ClipFetch Watch is a working product name; it is runnable as a preview (streaming works; automated in-app
+downloading is still to come). "Netflix for Reels" describes the browsing quality we're aiming for, not a Netflix
+clone or any affiliation with Netflix.*
 
 ---
 
