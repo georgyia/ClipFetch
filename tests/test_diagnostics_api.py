@@ -65,6 +65,22 @@ def test_bundle_is_redacted(tmp_path):
         assert "\\" not in value
 
 
+def test_worker_state_not_configured_by_default(tmp_path):
+    client, _ = _client(tmp_path)
+    assert client.get("/api/v1/diagnostics").json()["worker"]["state"] == "not_configured"
+
+
+def test_worker_state_running_when_provider_configured(tmp_path):
+    from clipfetch.services.ingest_service import FakeSourceProvider
+
+    appstate = AppState.open(tmp_path / "appstate.sqlite3")
+    app = create_app(appstate, provider=FakeSourceProvider())
+    # The context-manager form runs the app lifespan, which starts the worker.
+    with TestClient(app, raise_server_exceptions=False) as client:
+        body = client.get("/api/v1/diagnostics").json()
+    assert body["worker"]["state"] == "running"
+
+
 def test_diagnostics_works_without_active_library(tmp_path):
     # A support bundle must be obtainable even when nothing is set up.
     appstate = AppState.open(tmp_path / "appstate.sqlite3")

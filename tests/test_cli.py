@@ -156,11 +156,14 @@ def test_web_command_builds_app_and_serves(monkeypatch):
         served["host"] = host
         served["port"] = port
 
+    from clipfetch.services.browser_source import BrowserSourceProvider
+
     monkeypatch.setattr(cli, "_serve", fake_serve)
     monkeypatch.setattr(cli, "_open_browser_soon", lambda url: None)
     assert main(["web", "--no-browser", "--host", "127.0.0.1", "--port", "9123"]) == 0
     assert served["port"] == 9123
-    assert served["app"].state.job_provider is None  # no worker without --demo
+    # The default server wires the real (Instagram) download provider; --demo swaps in the fake.
+    assert isinstance(served["app"].state.job_provider, BrowserSourceProvider)
 
 
 def test_web_demo_wires_offline_provider(monkeypatch):

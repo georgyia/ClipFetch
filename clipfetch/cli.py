@@ -12,6 +12,8 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from fastapi import FastAPI
 
+    from clipfetch.services.ingest_service import SourceProvider
+
 from clipfetch import __version__, platforms
 from clipfetch.errors import ClipFetchError
 from clipfetch.library import ClipFilter, evaluate_filter, parse_magnitude
@@ -297,11 +299,17 @@ def _run_web(args: list[str], console: Console) -> int:
     from clipfetch.api.app import create_app
     from clipfetch.api.static import bundle_dir
 
-    provider = None
+    provider: SourceProvider
     if parsed.demo:
         from clipfetch.services.ingest_service import FakeSourceProvider
 
         provider = FakeSourceProvider()
+    else:
+        # Real downloads run through the signed-in browser profile (Instagram-first).
+        from clipfetch.platforms.instagram import Instagram
+        from clipfetch.services.browser_source import BrowserSourceProvider
+
+        provider = BrowserSourceProvider(Instagram())
 
     app = create_app(provider=provider)
     url = f"http://{parsed.host}:{parsed.port}"
