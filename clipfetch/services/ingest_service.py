@@ -118,16 +118,24 @@ def run_ingest(
 
 def process_next_job(
     appstate: AppState,
-    root: Path,
+    root: Path | None,
     provider: SourceProvider,
     *,
     owner: str = DEFAULT_OWNER,
     lease_seconds: float = DEFAULT_LEASE_SECONDS,
+    root_resolver: Callable[[Job], Path] | None = None,
 ) -> Job | None:
-    """Claim and run one queued job. Returns the finished job, or ``None`` if the queue is empty."""
+    """Claim and run one queued job. Returns the finished job, or ``None`` if the queue is empty.
+
+    Pass ``root`` for a single-library caller, or ``root_resolver`` to derive the on-disk root from
+    the claimed job (e.g. a worker draining jobs across libraries). Exactly one must resolve a path.
+    """
     job = appstate.claim_job(owner, lease_seconds=lease_seconds)
     if job is None:
         return None
+    job_root = root_resolver(job) if root_resolver is not None else root
+    if job_root is None:  # pragma: no cover - guarded by callers
+        raise ValueError("process_next_job needs a root or a root_resolver")
 
     def on_progress(current: int, total: int, phase: str) -> None:
         appstate.heartbeat_job(
@@ -141,7 +149,7 @@ def process_next_job(
     try:
         request = _parse_request(job.request_json)
         result = run_ingest(
-            root,
+            job_root,
             permalink=job.source_permalink or "",
             count=request.count,
             quality=request.quality,

@@ -42,3 +42,28 @@ jobs:
         # The suite uses fakes and a local HTTP server, so no browser binary
         # is downloaded — the Playwright package import alone is enough.
         run: python -m pytest -q
+
+  web-smoke:
+    # Clean-install check: build the UI, install the package *non-editably* so
+    # package data is exercised, and confirm `clipfetch web` serves the bundled
+    # SPA and the API from one origin.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - name: Build the UI bundle
+        run: |
+          npm --prefix web ci
+          npm --prefix web run build
+      - name: Install (non-editable, ships the bundle as package data)
+        run: pip install ".[web]"
+      - name: Serve and smoke-test
+        run: python scripts/smoke_web.py

@@ -38,6 +38,37 @@ Optional feature groups are installed as extras when you work on those subsystem
 | Transcripts | `pip install -e ".[transcribe]"` |
 | Duplicate detection | `pip install -e ".[duplicates]"` |
 | Windows cookie decryption | `pip install -e ".[cookies]"` |
+| ClipFetch Watch (web) | `pip install -e ".[web]"` (FastAPI + Uvicorn) |
+
+---
+
+## ClipFetch Watch (web interface)
+
+The streaming interface is a React + TypeScript app in [`web/`](web/) (Vite, Biome, Vitest) served by
+the FastAPI app in [`clipfetch/api/`](clipfetch/api/). Its own gates mirror the Python ones:
+
+```bash
+npm --prefix web install                        # once
+npm --prefix web run typecheck                  # tsc --noEmit
+npm --prefix web run lint                        # biome check .
+npm --prefix web test                            # vitest component tests
+npm --prefix web run build                       # production bundle
+```
+
+There are two ways to run it locally:
+
+- **Two-process dev** (hot reload): run the API with
+  `uvicorn clipfetch.api.app:create_app --factory --port 8000`, then `npm --prefix web run dev`. Vite
+  proxies `/api` and `/health` to the API, so the browser still talks to a single origin.
+- **One-origin bundle** (production shape): `npm --prefix web run build` writes the UI straight into
+  `clipfetch/webui/` (shipped as package data — gitignored, absent in a fresh checkout), then
+  `clipfetch web` serves the API and that bundle from one port. Without a build, `clipfetch web` runs
+  API-only and says so. Add `--demo` to process download jobs with an offline fake source (no network
+  or sign-in) so the full job pipeline is exercisable; `--host`, `--port`, and `--no-browser` are also
+  available.
+
+The background job worker starts and stops with the server, but only when a job source is configured
+(today: `--demo`). Wiring the real, browser-driven download provider is tracked separately.
 
 ---
 

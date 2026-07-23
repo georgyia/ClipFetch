@@ -43,6 +43,11 @@ version = { attr = "clipfetch.__version__" }
 [tool.setuptools.packages.find]
 include = ["clipfetch*"]
 
+[tool.setuptools.package-data]
+# Ship the built ClipFetch Watch UI bundle (produced by `npm --prefix web run build`) so
+# `clipfetch web` can serve it. Absent in a fresh checkout — the server then runs API-only.
+clipfetch = ["webui/**/*"]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-m 'not integration'"

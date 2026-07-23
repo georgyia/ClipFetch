@@ -8,6 +8,8 @@ conservative headers.
 from __future__ import annotations
 
 import uuid
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 from typing import Any
 
 from fastapi import FastAPI
@@ -32,7 +34,10 @@ from clipfetch.api.routes import (
     search,
     topics,
 )
+from clipfetch.api.static import mount_frontend
 from clipfetch.appstate import AppState
+from clipfetch.services.ingest_service import SourceProvider
+from clipfetch.worker import Worker
 
 API_PREFIX = "/api/v1"
 
@@ -49,11 +54,33 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
         return response
 
 
-def create_app(appstate: AppState | None = None) -> FastAPI:
+@asynccontextmanager
+async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
+    """Run the background job worker for the server's lifetime when one is configured.
+
+    Only a configured provider starts a thread, so tests and the API-only server stay thread-free.
+    """
+    provider = getattr(app.state, "job_provider", None)
+    worker: Worker | None = None
+    if provider is not None:
+        worker = Worker(app.state.appstate, provider=provider)
+        worker.start()
+    app.state.worker = worker
+    try:
+        yield
+    finally:
+        if worker is not None:
+            worker.stop()
+
+
+def create_app(
+    appstate: AppState | None = None, *, provider: SourceProvider | None = None
+) -> FastAPI:
     """Build the ClipFetch Watch API application.
 
     ``appstate`` may be supplied (tests, custom locations); otherwise the OS-default
-    application-state database is opened lazily.
+    application-state database is opened lazily. ``provider`` wires a job source into a background
+    worker for the app's lifetime; when omitted no worker thread runs and jobs remain queued.
     """
     app = FastAPI(
         title="ClipFetch Watch API",
@@ -61,8 +88,10 @@ def create_app(appstate: AppState | None = None) -> FastAPI:
         docs_url="/api/docs",
         redoc_url=None,
         openapi_url="/api/openapi.json",
+        lifespan=_lifespan,
     )
     app.state.appstate = appstate if appstate is not None else AppState.open()
+    app.state.job_provider = provider
     app.add_middleware(RequestContextMiddleware)
     install_exception_handlers(app)
 
@@ -90,4 +119,6 @@ def create_app(appstate: AppState | None = None) -> FastAPI:
     app.include_router(media.router)
     app.include_router(playback.router)
     app.include_router(search.router)
+    # Mounted last: the SPA catch-all must not shadow the API/health routes above.
+    mount_frontend(app)
     return app
