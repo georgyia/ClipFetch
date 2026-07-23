@@ -12,6 +12,7 @@ import type {
   ClipPage,
   CollectionSummary,
   HomeResponse,
+  Job,
   PlaybackView,
   SearchResponse,
   TopicSummary,
@@ -45,6 +46,40 @@ export function useActivateLibrary() {
       apiPost<unknown>(`/api/v1/libraries/${encodeURIComponent(libraryId)}/activate`),
     onSuccess: () => {
       queryClient.invalidateQueries();
+    },
+  });
+}
+
+/** Poll the job list. While any job is active, refetch on an interval as the SSE-free fallback. */
+export function useJobs() {
+  return useQuery({
+    queryKey: ["jobs"],
+    queryFn: () => apiGet<{ jobs: Job[] }>("/api/v1/jobs"),
+    refetchInterval: (query) => {
+      const jobs = query.state.data?.jobs ?? [];
+      const active = jobs.some((job) => job.state === "queued" || job.state === "running");
+      return active ? 2000 : false;
+    },
+  });
+}
+
+export function useEnqueueJob() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: { url: string; count?: number }) =>
+      apiPost<Job>("/api/v1/jobs", { kind: "download", url: input.url, count: input.count ?? 1 }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["jobs"] });
+    },
+  });
+}
+
+export function useCancelJob() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (jobId: string) => apiPost<Job>(`/api/v1/jobs/${encodeURIComponent(jobId)}/cancel`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["jobs"] });
     },
   });
 }

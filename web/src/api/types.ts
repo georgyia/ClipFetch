@@ -104,6 +104,27 @@ export interface PlaybackView {
   updated_at: string;
 }
 
+export interface Job {
+  id: string;
+  kind: string;
+  state: "queued" | "running" | "succeeded" | "failed" | "cancelled";
+  source_permalink: string | null;
+  phase: string | null;
+  progress_current: number | null;
+  progress_total: number | null;
+  attempt: number;
+  max_attempts: number;
+  cancel_requested: boolean;
+  error: { code: string; message: string } | null;
+  result: { downloaded?: number; clip_ids?: string[] } | null;
+  created_at: string;
+  started_at: string | null;
+  finished_at: string | null;
+  updated_at: string;
+}
+
+export const JOB_ACTIVE_STATES = ["queued", "running"] as const;
+
 /** Media endpoints are addressed by clip id only; no filesystem paths ever reach the client. */
 export function posterUrl(clipId: string): string {
   return `/api/v1/clips/${encodeURIComponent(clipId)}/poster`;

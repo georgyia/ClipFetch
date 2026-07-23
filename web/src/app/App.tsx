@@ -3,6 +3,7 @@ import { ClipDetailPage } from "../pages/ClipDetailPage";
 import { CollectionDetailPage } from "../pages/CollectionDetailPage";
 import { CollectionsPage } from "../pages/CollectionsPage";
 import { ComingSoon } from "../pages/ComingSoon";
+import { DownloadsPage } from "../pages/DownloadsPage";
 import { ExplorePage } from "../pages/ExplorePage";
 import { FavoritesPage } from "../pages/FavoritesPage";
 import { HomePage } from "../pages/HomePage";
@@ -28,15 +29,7 @@ export function App() {
         <Route path="/collections/:id" element={<CollectionDetailPage />} />
         <Route path="/clip/:id" element={<ClipDetailPage />} />
         <Route path="/watch/:id" element={<PlayerPage />} />
-        <Route
-          path="/downloads"
-          element={
-            <ComingSoon
-              title="Downloads"
-              description="Queue new clips and watch enrichment progress once the worker lands."
-            />
-          }
-        />
+        <Route path="/downloads" element={<DownloadsPage />} />
         <Route
           path="/settings"
           element={
