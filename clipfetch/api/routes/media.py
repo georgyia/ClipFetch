@@ -1,9 +1,11 @@
 """Media delivery endpoints, addressed only by clip ID.
 
-The poster endpoint returns a cached neutral placeholder until real posters are generated. The
-server resolves the clip through the active library catalog and never accepts a path parameter.
+The poster endpoint serves a generated frame once one exists and a deterministic placeholder until
+then. The server resolves the clip through the active library catalog and never accepts a path
+parameter.
 """
 
+import os
 from pathlib import Path
 
 from fastapi import APIRouter, Request, Response
@@ -13,7 +15,7 @@ from clipfetch.api.dependencies import ActiveLibraryRootDep
 from clipfetch.api.errors import ApiException
 from clipfetch.catalog import CatalogError
 from clipfetch.library import find_clip
-from clipfetch.services import media_service
+from clipfetch.services import media_service, poster_service
 from clipfetch.services.media_service import MediaError
 
 router = APIRouter(prefix="/api/v1/clips", tags=["media"])
@@ -54,6 +56,19 @@ def get_poster(clip_id: str, root: ActiveLibraryRootDep, request: Request) -> Re
         record = find_clip(root, clip_id)
     except CatalogError as err:
         raise ApiException(404, "clip_not_found", str(err)) from err
+
+    # Serve a generated poster once one exists; fall back to the deterministic placeholder.
+    generated = poster_service.poster_path(root, record.platform, record.clip_id)
+    if generated.is_file():
+        stat = os.stat(generated)
+        etag = f'"poster-{stat.st_size}-{stat.st_mtime_ns}"'
+        if request.headers.get("if-none-match") == etag:
+            return Response(status_code=304, headers={"ETag": etag})
+        return Response(
+            content=generated.read_bytes(),
+            media_type="image/jpeg",
+            headers={"ETag": etag, "Cache-Control": "public, max-age=3600"},
+        )
 
     etag = media_service.poster_etag(record)
     if request.headers.get("if-none-match") == etag:
