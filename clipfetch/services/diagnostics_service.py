@@ -52,7 +52,7 @@ def _catalog_version(appstate: AppState) -> int | None:
         return None
 
 
-def build_bundle(appstate: AppState) -> dict[str, Any]:
+def build_bundle(appstate: AppState, *, worker_state: str = "not_configured") -> dict[str, Any]:
     """Build the redacted diagnostics bundle. Contains only versions, counts, enums, and flags."""
     active = library_service.active_library(appstate)
     libraries = library_service.list_libraries(appstate)
@@ -67,7 +67,7 @@ def build_bundle(appstate: AppState) -> dict[str, Any]:
             "appstate": appstate.schema_version,
             "catalog": _catalog_version(appstate),
         },
-        "worker": {"state": "not_configured"},
+        "worker": {"state": worker_state},
         "capabilities": capability_matrix(),
         "platforms": _platform_matrix(),
         "libraries": {

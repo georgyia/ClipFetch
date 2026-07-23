@@ -29,16 +29,30 @@ DEFAULT_LEASE_SECONDS = 60.0
 
 
 class IngestError(RuntimeError):
-    """A source-level failure with a message safe to show the user."""
+    """A source-level failure with a message safe to show the user.
+
+    ``code`` is a stable failure category (``authentication_required``, ``rate_limited``,
+    ``source_unavailable``, ``unsupported_source``, or the default ``source_error``) that the job
+    records as its public error code, so the UI can offer the right recovery action.
+    """
+
+    def __init__(self, message: str, *, code: str = "source_error") -> None:
+        super().__init__(message)
+        self.code = code
 
 
 @dataclass(frozen=True)
 class SourceClip:
-    """One clip produced by a source provider, ready to be written and catalogued."""
+    """One clip produced by a source provider, ready to be written and catalogued.
+
+    Provide exactly one of ``media`` (in-memory bytes, used by the offline fake) or ``media_path``
+    (a file already downloaded to a temporary location, used by real providers so whole videos never
+    sit in memory). ``run_ingest`` moves ``media_path`` into the library.
+    """
 
     clip_id: str
     platform: str
-    media: bytes
+    media: bytes | None
     source_url: str
     author: str | None = None
     caption: str | None = None
@@ -46,6 +60,7 @@ class SourceClip:
     views: int | None = None
     duration_seconds: float | None = None
     hashtags: tuple[str, ...] = ()
+    media_path: Path | None = None
 
 
 class SourceProvider(Protocol):
@@ -87,10 +102,10 @@ def run_ingest(
                 result.cancelled = True
                 break
             relative = f"{clip.platform}/{clip.clip_id}.mp4"
-            media_path = root / relative
-            media_path.parent.mkdir(parents=True, exist_ok=True)
-            media_path.write_bytes(clip.media)
-            stat = os.stat(media_path)
+            dest = root / relative
+            dest.parent.mkdir(parents=True, exist_ok=True)
+            _write_media(clip, dest)
+            stat = os.stat(dest)
             catalog.upsert(
                 CatalogRecord(
                     platform=clip.platform,
@@ -158,7 +173,7 @@ def process_next_job(
             cancel_check=cancelled,
         )
     except IngestError as err:
-        return appstate.fail_job(job.id, owner, error_code="source_error", error_message=str(err))
+        return appstate.fail_job(job.id, owner, error_code=err.code, error_message=str(err))
     except Exception:  # noqa: BLE001 - never leak internals into the public job error
         return appstate.fail_job(
             job.id, owner, error_code="ingest_failed",
@@ -191,6 +206,18 @@ def _parse_request(request_json: str) -> _ParsedRequest:
         count=count if isinstance(count, int) and count > 0 else 1,
         quality=quality if isinstance(quality, str) else None,
     )
+
+
+def _write_media(clip: SourceClip, dest: Path) -> None:
+    """Place a clip's media at ``dest``: move a downloaded file, or write in-memory bytes."""
+    if clip.media_path is not None:
+        import shutil
+
+        shutil.move(str(clip.media_path), str(dest))
+    elif clip.media is not None:
+        dest.write_bytes(clip.media)
+    else:  # pragma: no cover - a provider must supply one
+        raise IngestError("The source produced a clip with no media.")
 
 
 def _now_iso() -> str:

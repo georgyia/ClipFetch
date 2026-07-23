@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Request
 
 from clipfetch.api.dependencies import AppStateDep
 from clipfetch.services import diagnostics_service
@@ -17,5 +17,10 @@ router = APIRouter(prefix="/api/v1", tags=["diagnostics"])
 
 
 @router.get("/diagnostics")
-def diagnostics(appstate: AppStateDep) -> dict[str, Any]:
-    return diagnostics_service.build_bundle(appstate)
+def diagnostics(request: Request, appstate: AppStateDep) -> dict[str, Any]:
+    # The worker is only present when the app lifespan started one (a provider was configured).
+    worker_state = "running" if getattr(request.app.state, "worker", None) is not None else (
+        "configured" if getattr(request.app.state, "job_provider", None) is not None
+        else "not_configured"
+    )
+    return diagnostics_service.build_bundle(appstate, worker_state=worker_state)

@@ -86,6 +86,29 @@ def _wait_for_login(
 
 
 @contextmanager
+def authenticated_session(
+    platform: Platform, headed: bool = False
+) -> Iterator[BrowserContext]:
+    """Yield a browser context for ``platform`` using its **existing** saved session.
+
+    Unlike :func:`platform_session`, this never opens an interactive sign-in window: it is for
+    unattended use (the ClipFetch Watch worker) where a missing session must fail fast rather than
+    block on a human. Raises :class:`NotLoggedInError` when the profile has no valid session cookie.
+    """
+    profile = profile_dir(platform)
+    with sync_playwright() as playwright:
+        context = _launch(playwright, profile, headless=not headed)
+        try:
+            if not has_session_cookie(context, platform):
+                raise NotLoggedInError(
+                    f"Not signed in to {platform.label}. Connect the account first."
+                )
+            yield context
+        finally:
+            context.close()
+
+
+@contextmanager
 def platform_session(
     platform: Platform,
     console: Console,
