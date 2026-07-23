@@ -181,6 +181,7 @@ export function ExplorePage() {
         query={query}
         emptyTitle="No matches"
         emptyDescription="Try relaxing a filter to see more clips."
+        queueContext={{ from: "explore", params }}
       />
     </section>
   );
