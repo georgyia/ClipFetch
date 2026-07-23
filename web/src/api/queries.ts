@@ -12,6 +12,7 @@ import type {
   ClipPage,
   ClipSummary,
   CollectionSummary,
+  Diagnostics,
   HomeResponse,
   Job,
   PlaybackView,
@@ -82,6 +83,13 @@ export function useCancelJob() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["jobs"] });
     },
+  });
+}
+
+export function useDiagnostics() {
+  return useQuery({
+    queryKey: ["diagnostics"],
+    queryFn: () => apiGet<Diagnostics>("/api/v1/diagnostics"),
   });
 }
 

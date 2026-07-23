@@ -124,6 +124,17 @@ export interface PlaybackView {
   updated_at: string;
 }
 
+export interface Diagnostics {
+  app_version: string;
+  generated_at: string;
+  schema: { appstate: number; catalog: number | null };
+  worker: { state: string };
+  capabilities: Record<string, Capability>;
+  platforms: Array<{ name: string; support: string }>;
+  libraries: { count: number; active: { health: string; clip_count: number } | null };
+  jobs: Record<string, number>;
+}
+
 export interface Job {
   id: string;
   kind: string;
