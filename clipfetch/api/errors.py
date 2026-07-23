@@ -11,6 +11,7 @@ from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
+from starlette.responses import Response
 
 from clipfetch.contracts import ApiError
 
@@ -62,7 +63,15 @@ def install_exception_handlers(app: FastAPI) -> None:
     async def handle_validation(request: Request, exc: RequestValidationError) -> JSONResponse:
         return _envelope(request, 422, "invalid_request", "The request parameters are invalid.")
 
-    async def handle_http(request: Request, exc: StarletteHTTPException) -> JSONResponse:
+    async def handle_http(request: Request, exc: StarletteHTTPException) -> Response:
+        if exc.status_code == 404:
+            # Deep links / refreshes to client-side routes resolve to the SPA shell when a UI
+            # bundle is present; API and health 404s still return the JSON envelope.
+            from clipfetch.api.static import spa_fallback_response
+
+            fallback = spa_fallback_response(request)
+            if fallback is not None:
+                return fallback
         code = _STATUS_CODES.get(exc.status_code, "http_error")
         default = "The request could not be completed."
         message = exc.detail if isinstance(exc.detail, str) else default

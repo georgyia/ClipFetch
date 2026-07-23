@@ -123,6 +123,58 @@ def test_main_prints_banner_for_valid_run(capsys, monkeypatch):
     assert len(calls) == 1
 
 
+def test_web_help_exits_zero(capsys):
+    assert main(["web", "--help"]) == 0
+    assert "web interface" in capsys.readouterr().out.lower()
+
+
+def test_web_missing_extras_is_friendly(monkeypatch, capsys):
+    import importlib.util
+
+    from clipfetch import cli
+
+    real_find_spec = importlib.util.find_spec
+
+    def fake_find_spec(name, *args, **kwargs):
+        if name == "uvicorn":
+            return None
+        return real_find_spec(name, *args, **kwargs)
+
+    monkeypatch.setattr(importlib.util, "find_spec", fake_find_spec)
+    assert cli._run_web(["--no-browser"], cli.Console()) == 1
+    assert 'pip install "clipfetch[web]"' in capsys.readouterr().out
+
+
+def test_web_command_builds_app_and_serves(monkeypatch):
+    pytest.importorskip("fastapi")
+    from clipfetch import cli
+
+    served = {}
+
+    def fake_serve(app, *, host, port):
+        served["app"] = app
+        served["host"] = host
+        served["port"] = port
+
+    monkeypatch.setattr(cli, "_serve", fake_serve)
+    monkeypatch.setattr(cli, "_open_browser_soon", lambda url: None)
+    assert main(["web", "--no-browser", "--host", "127.0.0.1", "--port", "9123"]) == 0
+    assert served["port"] == 9123
+    assert served["app"].state.job_provider is None  # no worker without --demo
+
+
+def test_web_demo_wires_offline_provider(monkeypatch):
+    pytest.importorskip("fastapi")
+    from clipfetch import cli
+    from clipfetch.services.ingest_service import FakeSourceProvider
+
+    served = {}
+    monkeypatch.setattr(cli, "_serve", lambda app, **kw: served.setdefault("app", app))
+    monkeypatch.setattr(cli, "_open_browser_soon", lambda url: None)
+    assert main(["web", "--no-browser", "--demo"]) == 0
+    assert isinstance(served["app"].state.job_provider, FakeSourceProvider)
+
+
 def test_library_index_cli_reports_counts(tmp_path, capsys):
     (tmp_path / "reel_001_ABC.mp4").write_bytes(b"video")
     assert main(["library", "index", str(tmp_path)]) == 0

@@ -6,6 +6,12 @@ import { defineConfig } from "vite";
 // browser talks to a single origin, matching the packaged build.
 export default defineConfig({
   plugins: [react()],
+  // Build straight into the Python package so `clipfetch web` serves the bundle with no copy step.
+  // emptyOutDir is off so the tracked .gitignore that marks the directory survives rebuilds.
+  build: {
+    outDir: "../clipfetch/webui",
+    emptyOutDir: false,
+  },
   server: {
     proxy: {
       "/api": "http://127.0.0.1:8000",

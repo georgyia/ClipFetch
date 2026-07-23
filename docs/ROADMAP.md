@@ -1,8 +1,10 @@
 # Roadmap
 
 > **Status.** ClipFetch — the command-line downloader, catalog, and library engine — **ships today.**
-> **ClipFetch Watch** — the local-first *streaming interface* over that library — is **in design**. This page is
-> the short version; the authoritative plan is [clipfetch-watch-plan.md](clipfetch-watch-plan.md).
+> **ClipFetch Watch** — the local-first *streaming interface* over that library — is now a **runnable preview**
+> (`clipfetch web`): browsing, search, collections, and the vertical player work; automated in-app downloading is
+> the remaining gap. See the [user guide](watch-user-guide.md). This page is the short version; the authoritative
+> plan is [clipfetch-watch-plan.md](clipfetch-watch-plan.md).
 
 ## The north star
 

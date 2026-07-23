@@ -7,6 +7,10 @@ import json
 import sys
 from dataclasses import dataclass
 from pathlib import Path
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from fastapi import FastAPI
 
 from clipfetch import __version__, platforms
 from clipfetch.errors import ClipFetchError
@@ -263,6 +267,73 @@ def _run_watch(args: list[str], console: Console) -> int:
         return 1
     videos = [parsed.dir / record.relative_path for record in result.clips]
     return watch(parsed.dir, console, shuffle=parsed.shuffle, videos=videos)
+
+
+def _run_web(args: list[str], console: Console) -> int:
+    """Serve the ClipFetch Watch API and (if built) the UI from a single local origin."""
+    parser = argparse.ArgumentParser(
+        prog="clipfetch web", description="Serve the ClipFetch Watch web interface locally."
+    )
+    parser.add_argument("--host", default="127.0.0.1", help="bind address (default: 127.0.0.1)")
+    parser.add_argument("--port", type=int, default=8000, help="port (default: 8000)")
+    parser.add_argument("--no-browser", action="store_true", help="do not open a browser")
+    parser.add_argument(
+        "--demo",
+        action="store_true",
+        help="process download jobs with an offline fake source (no network or sign-in)",
+    )
+    try:
+        parsed = parser.parse_args(args)
+    except SystemExit as exit_:
+        return int(exit_.code or 0)
+
+    import importlib.util
+
+    missing = [pkg for pkg in ("fastapi", "uvicorn") if importlib.util.find_spec(pkg) is None]
+    if missing:
+        console.error('The web interface needs extra packages: pip install "clipfetch[web]"')
+        return 1
+
+    from clipfetch.api.app import create_app
+    from clipfetch.api.static import bundle_dir
+
+    provider = None
+    if parsed.demo:
+        from clipfetch.services.ingest_service import FakeSourceProvider
+
+        provider = FakeSourceProvider()
+
+    app = create_app(provider=provider)
+    url = f"http://{parsed.host}:{parsed.port}"
+    console.success(f"ClipFetch Watch is running at {url}")
+    if bundle_dir() is None:
+        console.info("UI not built — serving the API only. Build: npm --prefix web run build")
+    if parsed.demo:
+        console.dim("Demo mode: downloads are simulated offline with a deterministic fake source.")
+    console.dim("Press Ctrl+C to stop.")
+    if not parsed.no_browser and bundle_dir() is not None:
+        _open_browser_soon(url)
+
+    try:
+        _serve(app, host=parsed.host, port=parsed.port)
+    except KeyboardInterrupt:  # pragma: no cover - interactive shutdown
+        console.info("Stopped.")
+    return 0
+
+
+def _serve(app: FastAPI, *, host: str, port: int) -> None:  # pragma: no cover - runs a real server
+    """Run the ASGI app under uvicorn. Isolated so tests can drive ``_run_web`` without a server."""
+    import uvicorn
+
+    uvicorn.run(app, host=host, port=port, log_level="warning")
+
+
+def _open_browser_soon(url: str) -> None:  # pragma: no cover - opens a real browser
+    """Open the UI once the server has had a moment to bind, without blocking startup."""
+    import threading
+    import webbrowser
+
+    threading.Timer(1.0, lambda: webbrowser.open(url)).start()
 
 
 def _run_topics(args: list[str], console: Console) -> int:
@@ -899,6 +970,11 @@ def main(argv: list[str] | None = None) -> int:
         if not any(value in args for value in ("-h", "--help")):
             console.banner(__version__)
         return _run_topics(args[1:], console)
+
+    if args and args[0] == "web":
+        if not any(value in args for value in ("-h", "--help")):
+            console.banner(__version__)
+        return _run_web(args[1:], console)
 
     try:
         opts = parse_args(args)
