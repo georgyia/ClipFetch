@@ -27,22 +27,29 @@ function makeJob(overrides: Partial<Job>): Job {
   };
 }
 
+const INSTAGRAM = {
+  platform: "instagram",
+  label: "Instagram",
+  support: "full",
+  state: "unknown",
+  connected: false,
+};
+
 let jobs: Job[];
 
 beforeEach(() => {
   jobs = [
-    makeJob({
-      id: "active",
-      state: "running",
-      progress_current: 2,
-      progress_total: 5,
-      phase: "downloading",
-    }),
+    makeJob({ id: "active", state: "running", progress_current: 2, progress_total: 5 }),
     makeJob({
       id: "done",
       state: "succeeded",
       source_permalink: "https://x/p/2",
       result: { downloaded: 3, clip_ids: ["IG_A"] },
+    }),
+    makeJob({
+      id: "authfail",
+      state: "failed",
+      error: { code: "authentication_required", message: "Not signed in to Instagram." },
     }),
   ];
   vi.stubGlobal(
@@ -50,6 +57,12 @@ beforeEach(() => {
     vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = String(input);
       const method = init?.method ?? "GET";
+      if (url.endsWith("/accounts") && method === "GET") {
+        return new Response(JSON.stringify({ accounts: [INSTAGRAM] }), { status: 200 });
+      }
+      if (url.includes("/accounts/") && url.endsWith("/connect")) {
+        return new Response(JSON.stringify({ ...INSTAGRAM, state: "connecting" }), { status: 200 });
+      }
       if (url.endsWith("/jobs") && method === "POST") {
         const body = JSON.parse(String(init?.body));
         const created = makeJob({ id: "new", source_permalink: body.url });
@@ -80,37 +93,68 @@ function renderPage() {
   );
 }
 
+function lastPost(path: string) {
+  const calls = vi.mocked(globalThis.fetch).mock.calls;
+  return calls.find(([u, init]) => String(u).endsWith(path) && init?.method === "POST");
+}
+
 test("groups active and finished jobs and shows progress", async () => {
   renderPage();
   expect(await screen.findByText("Active (1)")).toBeInTheDocument();
   expect(screen.getByRole("progressbar")).toHaveAttribute("aria-valuenow", "40");
-  // The succeeded job links to its first clip.
   expect(screen.getByRole("link", { name: "View" })).toHaveAttribute("href", "/clip/IG_A");
 });
 
-test("submitting a URL enqueues a download", async () => {
+test("downloads from the feed with the chosen count and quality", async () => {
   renderPage();
   await screen.findByText("Active (1)");
-  fireEvent.change(screen.getByLabelText("Source URL"), {
-    target: { value: "https://x/p/9" },
-  });
+  fireEvent.change(screen.getByLabelText("Count"), { target: { value: "12" } });
   fireEvent.click(screen.getByRole("button", { name: "Download" }));
-  const fetchMock = vi.mocked(globalThis.fetch);
   await waitFor(() => {
-    const post = fetchMock.mock.calls.find(
-      ([u, init]) => String(u).endsWith("/jobs") && init?.method === "POST",
-    );
+    const post = lastPost("/jobs");
     expect(post).toBeDefined();
-    expect(JSON.parse(String(post?.[1]?.body))).toMatchObject({ url: "https://x/p/9" });
+    expect(JSON.parse(String(post?.[1]?.body))).toMatchObject({
+      kind: "download",
+      url: "",
+      count: 12,
+      quality: "high",
+    });
   });
+});
+
+test("account mode downloads a single @handle", async () => {
+  renderPage();
+  await screen.findByText("Active (1)");
+  fireEvent.change(screen.getByLabelText("Source"), { target: { value: "account" } });
+  fireEvent.change(screen.getByLabelText("Account"), { target: { value: "nasa" } });
+  fireEvent.click(screen.getByRole("button", { name: "Download" }));
+  await waitFor(() => {
+    expect(JSON.parse(String(lastPost("/jobs")?.[1]?.body))).toMatchObject({ url: "@nasa" });
+  });
+});
+
+test("Connect Instagram starts a sign-in", async () => {
+  renderPage();
+  await screen.findByText("Active (1)");
+  fireEvent.click(screen.getByRole("button", { name: "Connect Instagram" }));
+  await waitFor(() => expect(lastPost("/accounts/instagram/connect")).toBeDefined());
+});
+
+test("an auth-required failure offers a Connect action", async () => {
+  renderPage();
+  await screen.findByText("Active (1)");
+  const connect = await screen.findByRole("button", { name: "Connect account" });
+  fireEvent.click(connect);
+  await waitFor(() => expect(lastPost("/accounts/instagram/connect")).toBeDefined());
 });
 
 test("cancels an active job", async () => {
   renderPage();
   await screen.findByText("Active (1)");
   fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
-  const fetchMock = vi.mocked(globalThis.fetch);
   await waitFor(() =>
-    expect(fetchMock.mock.calls.some(([u]) => String(u).includes("/cancel"))).toBe(true),
+    expect(
+      vi.mocked(globalThis.fetch).mock.calls.some(([u]) => String(u).includes("/cancel")),
+    ).toBe(true),
   );
 });

@@ -1,7 +1,13 @@
 import { type FormEvent, useState } from "react";
 import { Link } from "react-router-dom";
-import { useCancelJob, useEnqueueJob, useJobs } from "../api/queries";
-import type { Job } from "../api/types";
+import {
+  useAccounts,
+  useCancelJob,
+  useConnectAccount,
+  useEnqueueJob,
+  useJobs,
+} from "../api/queries";
+import type { Account, Job } from "../api/types";
 import { Button } from "../components/Button";
 import { ErrorState } from "../components/ErrorState";
 import { LoadingState } from "../components/LoadingState";
@@ -12,16 +18,18 @@ const ACTIVE = new Set(["queued", "running"]);
 function JobRow({ job }: { job: Job }) {
   const cancel = useCancelJob();
   const enqueue = useEnqueueJob();
+  const connect = useConnectAccount();
   const total = job.progress_total ?? 0;
   const current = job.progress_current ?? 0;
   const pct = total > 0 ? Math.round((current / total) * 100) : job.state === "succeeded" ? 100 : 0;
   const firstClip = job.result?.clip_ids?.[0];
+  const needsSignIn = job.state === "failed" && job.error?.code === "authentication_required";
 
   return (
     <li className={styles.job}>
       <div className={styles.jobHead}>
         <span className={styles.permalink} title={job.source_permalink ?? undefined}>
-          {job.source_permalink ?? job.kind}
+          {job.source_permalink || "Your feed"}
         </span>
         <span className={`${styles.state} ${styles[job.state]}`}>{job.state}</span>
         <div className={styles.actions}>
@@ -34,7 +42,15 @@ function JobRow({ job }: { job: Job }) {
               Cancel
             </Button>
           ) : null}
-          {job.state === "failed" && job.source_permalink ? (
+          {needsSignIn ? (
+            <Button
+              variant="ghost"
+              onClick={() => connect.mutate("instagram")}
+              disabled={connect.isPending}
+            >
+              Connect account
+            </Button>
+          ) : job.state === "failed" ? (
             <Button
               variant="ghost"
               onClick={() => enqueue.mutate({ url: job.source_permalink ?? "" })}
@@ -84,22 +100,60 @@ function JobRow({ job }: { job: Job }) {
   );
 }
 
-// Downloads: submit a source URL, watch active jobs progress (polled while any is active), and
-// review history with retry and result links. The platform matrix is stated honestly.
+function AccountBar({ account }: { account: Account | undefined }) {
+  const connect = useConnectAccount();
+  const state = account?.state ?? "unknown";
+
+  return (
+    <div className={styles.account}>
+      <span>
+        <strong>Instagram</strong>{" "}
+        {state === "connected"
+          ? "connected ✓"
+          : state === "connecting"
+            ? "opening sign-in…"
+            : state === "no_display"
+              ? "sign in via the CLI on this machine"
+              : "not connected"}
+      </span>
+      {state !== "connected" && state !== "no_display" ? (
+        <Button
+          variant="ghost"
+          onClick={() => connect.mutate("instagram")}
+          disabled={connect.isPending || state === "connecting"}
+        >
+          Connect Instagram
+        </Button>
+      ) : null}
+    </div>
+  );
+}
+
+// Downloads: add reels from your Instagram feed or a single account, watch jobs progress, and review
+// history with retry / sign-in recovery. The platform matrix is stated honestly.
 export function DownloadsPage() {
   const jobs = useJobs();
+  const accounts = useAccounts();
   const enqueue = useEnqueueJob();
-  const [url, setUrl] = useState("");
-  const [count, setCount] = useState("1");
+  const [source, setSource] = useState<"feed" | "account">("feed");
+  const [handle, setHandle] = useState("");
+  const [count, setCount] = useState("10");
+  const [quality, setQuality] = useState("high");
+
+  const instagram = accounts.data?.accounts.find((a) => a.platform === "instagram");
 
   function onSubmit(event: FormEvent) {
     event.preventDefault();
-    const trimmed = url.trim();
-    if (!trimmed) {
+    const cleaned = handle.trim().replace(/^@+/, "");
+    if (source === "account" && cleaned === "") {
       return;
     }
-    enqueue.mutate({ url: trimmed, count: Number(count) || 1 });
-    setUrl("");
+    enqueue.mutate({
+      url: source === "account" ? `@${cleaned}` : "",
+      count: Number(count) || 1,
+      quality,
+    });
+    setHandle("");
   }
 
   const all = jobs.data?.jobs ?? [];
@@ -110,20 +164,40 @@ export function DownloadsPage() {
     <section aria-label="Downloads">
       <h1>Downloads</h1>
 
-      <form className={styles.form} onSubmit={onSubmit} aria-label="New download">
+      <AccountBar account={instagram} />
+
+      <form className={styles.form} onSubmit={onSubmit} aria-label="Add reels">
         <div className={styles.field}>
-          <label className={styles.label} htmlFor="download-url">
-            Source URL
+          <label className={styles.label} htmlFor="download-source">
+            Source
           </label>
-          <input
-            id="download-url"
+          <select
+            id="download-source"
             className={styles.input}
-            type="url"
-            value={url}
-            placeholder="https://www.instagram.com/reel/…"
-            onChange={(event) => setUrl(event.target.value)}
-          />
+            value={source}
+            onChange={(event) => setSource(event.target.value as "feed" | "account")}
+          >
+            <option value="feed">Your Instagram feed</option>
+            <option value="account">A single account</option>
+          </select>
         </div>
+
+        {source === "account" ? (
+          <div className={styles.field}>
+            <label className={styles.label} htmlFor="download-handle">
+              Account
+            </label>
+            <input
+              id="download-handle"
+              className={styles.input}
+              type="text"
+              value={handle}
+              placeholder="@nasa"
+              onChange={(event) => setHandle(event.target.value)}
+            />
+          </div>
+        ) : null}
+
         <div className={`${styles.field} ${styles.count}`}>
           <label className={styles.label} htmlFor="download-count">
             Count
@@ -138,7 +212,28 @@ export function DownloadsPage() {
             onChange={(event) => setCount(event.target.value)}
           />
         </div>
-        <Button type="submit" variant="primary" disabled={enqueue.isPending || url.trim() === ""}>
+
+        <div className={styles.field}>
+          <label className={styles.label} htmlFor="download-quality">
+            Quality
+          </label>
+          <select
+            id="download-quality"
+            className={styles.input}
+            value={quality}
+            onChange={(event) => setQuality(event.target.value)}
+          >
+            <option value="high">High</option>
+            <option value="medium">Medium</option>
+            <option value="low">Low</option>
+          </select>
+        </div>
+
+        <Button
+          type="submit"
+          variant="primary"
+          disabled={enqueue.isPending || (source === "account" && handle.trim() === "")}
+        >
           Download
         </Button>
       </form>
@@ -148,7 +243,7 @@ export function DownloadsPage() {
           <strong>Instagram</strong> full support
         </span>
         <span>
-          <strong>TikTok</strong> experimental — downloads often blocked
+          <strong>TikTok</strong> experimental — use the CLI
         </span>
         <span>
           <strong>YouTube</strong> unavailable

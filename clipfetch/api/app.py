@@ -21,6 +21,7 @@ from clipfetch import __version__
 from clipfetch.api.capabilities import capability_matrix
 from clipfetch.api.errors import install_exception_handlers
 from clipfetch.api.routes import (
+    accounts,
     bootstrap,
     clips,
     collections,
@@ -37,6 +38,7 @@ from clipfetch.api.routes import (
 )
 from clipfetch.api.static import mount_frontend
 from clipfetch.appstate import AppState
+from clipfetch.services import accounts_service
 from clipfetch.services.ingest_service import SourceProvider
 from clipfetch.worker import Worker
 
@@ -93,6 +95,7 @@ def create_app(
     )
     app.state.appstate = appstate if appstate is not None else AppState.open()
     app.state.job_provider = provider
+    app.state.accounts = accounts_service.default_manager()
     app.add_middleware(RequestContextMiddleware)
     install_exception_handlers(app)
 
@@ -108,6 +111,7 @@ def create_app(
     def capabilities() -> dict[str, Any]:
         return {"capabilities": capability_matrix()}
 
+    app.include_router(accounts.router)
     app.include_router(bootstrap.router)
     app.include_router(libraries.router)
     app.include_router(clips.router)
