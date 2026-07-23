@@ -7,6 +7,7 @@ import {
 } from "@tanstack/react-query";
 import { apiDelete, apiGet, apiPost, apiPut } from "./client";
 import type {
+  Account,
   Bootstrap,
   ClipDetail,
   ClipPage,
@@ -68,10 +69,38 @@ export function useJobs() {
 export function useEnqueueJob() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (input: { url: string; count?: number }) =>
-      apiPost<Job>("/api/v1/jobs", { kind: "download", url: input.url, count: input.count ?? 1 }),
+    // An empty url means "your feed"; a leading @handle downloads a single account.
+    mutationFn: (input: { url?: string; count?: number; quality?: string }) =>
+      apiPost<Job>("/api/v1/jobs", {
+        kind: "download",
+        url: input.url ?? "",
+        count: input.count ?? 1,
+        quality: input.quality,
+      }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["jobs"] });
+    },
+  });
+}
+
+/** Per-platform sign-in status; polls while a connection is in progress. */
+export function useAccounts() {
+  return useQuery({
+    queryKey: ["accounts"],
+    queryFn: () => apiGet<{ accounts: Account[] }>("/api/v1/accounts"),
+    refetchInterval: (query) =>
+      (query.state.data?.accounts ?? []).some((a) => a.state === "connecting") ? 1500 : false,
+  });
+}
+
+/** Start a one-time sign-in for a platform (opens a browser window on the user's machine). */
+export function useConnectAccount() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (platform: string) =>
+      apiPost<Account>(`/api/v1/accounts/${encodeURIComponent(platform)}/connect`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["accounts"] });
     },
   });
 }

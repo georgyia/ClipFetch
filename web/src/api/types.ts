@@ -156,6 +156,14 @@ export interface Job {
 
 export const JOB_ACTIVE_STATES = ["queued", "running"] as const;
 
+export interface Account {
+  platform: string;
+  label: string;
+  support: string;
+  state: "unknown" | "connecting" | "connected" | "failed" | "no_display";
+  connected: boolean;
+}
+
 /** Media endpoints are addressed by clip id only; no filesystem paths ever reach the client. */
 export function posterUrl(clipId: string): string {
   return `/api/v1/clips/${encodeURIComponent(clipId)}/poster`;

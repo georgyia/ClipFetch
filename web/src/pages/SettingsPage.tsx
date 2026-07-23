@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useDiagnostics } from "../api/queries";
+import { useAccounts, useConnectAccount, useDiagnostics } from "../api/queries";
 import { Button } from "../components/Button";
 import { ErrorState } from "../components/ErrorState";
 import { LoadingState } from "../components/LoadingState";
@@ -10,6 +10,8 @@ import styles from "./SettingsPage.module.css";
 // copy into a bug report. The bundle contains only versions, counts, and flags — no paths or names.
 export function SettingsPage() {
   const { data, isLoading, isError } = useDiagnostics();
+  const accounts = useAccounts();
+  const connect = useConnectAccount();
   const [copied, setCopied] = useState(false);
 
   async function copyBundle() {
@@ -80,6 +82,32 @@ export function SettingsPage() {
                 <dt>{titleize(name)}</dt>
                 <dd className={capability.available ? styles.available : styles.unavailable}>
                   {capability.available ? "Available" : "Off"}
+                </dd>
+              </div>
+            ))}
+          </dl>
+        </div>
+
+        <div className={styles.card}>
+          <h2 className={styles.cardTitle}>Accounts</h2>
+          <dl className={styles.rows}>
+            {(accounts.data?.accounts ?? []).map((account) => (
+              <div key={account.platform} style={{ display: "contents" }}>
+                <dt>{account.label}</dt>
+                <dd className={account.connected ? styles.available : styles.unavailable}>
+                  {account.connected ? "Connected" : account.state}
+                  {!account.connected && account.state !== "no_display" ? (
+                    <>
+                      {" "}
+                      <Button
+                        variant="ghost"
+                        onClick={() => connect.mutate(account.platform)}
+                        disabled={connect.isPending || account.state === "connecting"}
+                      >
+                        Connect
+                      </Button>
+                    </>
+                  ) : null}
                 </dd>
               </div>
             ))}
