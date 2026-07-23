@@ -1,5 +1,5 @@
 import { Link, useParams } from "react-router-dom";
-import { useClipDetail, useClipList } from "../api/queries";
+import { useClipDetail, useRelated } from "../api/queries";
 import { type ClipDetail, posterUrl } from "../api/types";
 import { Button } from "../components/Button";
 import { ClipRail } from "../components/ClipRail";
@@ -28,28 +28,15 @@ function statList(clip: ClipDetail) {
 }
 
 function RelatedRail({ clip }: { clip: ClipDetail }) {
-  const slug = clip.topics[0] ?? "";
-  const query = useClipList(
-    ["related", slug],
-    (cursor) => {
-      const params = new URLSearchParams({ limit: "12", sort: "date" });
-      if (cursor) {
-        params.set("cursor", cursor);
-      }
-      return `/api/v1/topics/${encodeURIComponent(slug)}/clips?${params.toString()}`;
-    },
-    { enabled: slug !== "" },
-  );
-
-  const related = (query.data?.pages.flatMap((page) => page.items) ?? []).filter(
-    (item) => item.id !== clip.id,
-  );
+  const { data } = useRelated(clip.id);
+  const related = data?.items ?? [];
   if (related.length === 0) {
     return null;
   }
+  const seeAll = clip.topics[0] ? `/topics/${encodeURIComponent(clip.topics[0])}` : undefined;
   return (
     <div className={styles.section}>
-      <ClipRail title="More like this" items={related} seeAllTo={`/topics/${slug}`} />
+      <ClipRail title="More like this" items={related} seeAllTo={seeAll} />
     </div>
   );
 }

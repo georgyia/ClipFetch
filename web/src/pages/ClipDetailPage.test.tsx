@@ -24,16 +24,13 @@ const DETAIL = {
   },
 };
 
-const TOPIC_CLIPS = {
-  schema_version: 1,
-  items: [makeClip({ id: "IG_COOK1" }), makeClip({ id: "IG_COOK2", caption: "Second" })],
-  next_cursor: null,
-  total_matched: 2,
+const RELATED = {
+  items: [makeClip({ id: "IG_COOK2", caption: "Second" })],
 };
 
 function jsonFor(url: string) {
-  if (url.includes("/topics/")) {
-    return TOPIC_CLIPS;
+  if (url.includes("/related")) {
+    return RELATED;
   }
   return DETAIL;
 }
@@ -92,7 +89,7 @@ test("disables watch when media is unavailable", async () => {
     "fetch",
     vi.fn(
       async (input: RequestInfo | URL) =>
-        new Response(JSON.stringify(String(input).includes("/topics/") ? TOPIC_CLIPS : gone), {
+        new Response(JSON.stringify(String(input).includes("/related") ? RELATED : gone), {
           status: 200,
           headers: { "Content-Type": "application/json" },
         }),
