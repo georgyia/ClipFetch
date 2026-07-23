@@ -82,6 +82,20 @@ body {
   border-radius: var(--radius-small);
 }
 
+/* Available to assistive tech, removed from the visual layout (route announcer, off-screen labels). */
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  border: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
 .skip-link {
   position: absolute;
   left: var(--space-3);

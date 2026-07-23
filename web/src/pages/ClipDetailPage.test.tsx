@@ -15,18 +15,22 @@ const DETAIL = {
   transcript_language: "en",
   has_comments: false,
   comment_status: null,
+  media: {
+    tier: { slug: "full_hd", label: "Full HD", reason: "1080x1920 source" },
+    status: "ok",
+    width: 1080,
+    height: 1920,
+    video_codec: "h264",
+  },
 };
 
-const TOPIC_CLIPS = {
-  schema_version: 1,
-  items: [makeClip({ id: "IG_COOK1" }), makeClip({ id: "IG_COOK2", caption: "Second" })],
-  next_cursor: null,
-  total_matched: 2,
+const RELATED = {
+  items: [makeClip({ id: "IG_COOK2", caption: "Second" })],
 };
 
 function jsonFor(url: string) {
-  if (url.includes("/topics/")) {
-    return TOPIC_CLIPS;
+  if (url.includes("/related")) {
+    return RELATED;
   }
   return DETAIL;
 }
@@ -67,6 +71,9 @@ test("shows metadata, a watch link, and technical details", async () => {
   expect(screen.getByRole("link", { name: /Watch/ })).toHaveAttribute("href", "/watch/IG_COOK1");
   expect(screen.getByText("4.2 MB")).toBeInTheDocument();
   expect(screen.getByText("ready")).toBeInTheDocument();
+  // Probed technical quality tier and resolution.
+  expect(screen.getByText("Full HD")).toBeInTheDocument();
+  expect(screen.getByText(/1080×1920/)).toBeInTheDocument();
 });
 
 test("shows a related rail excluding the current clip", async () => {
@@ -82,7 +89,7 @@ test("disables watch when media is unavailable", async () => {
     "fetch",
     vi.fn(
       async (input: RequestInfo | URL) =>
-        new Response(JSON.stringify(String(input).includes("/topics/") ? TOPIC_CLIPS : gone), {
+        new Response(JSON.stringify(String(input).includes("/related") ? RELATED : gone), {
           status: 200,
           headers: { "Content-Type": "application/json" },
         }),

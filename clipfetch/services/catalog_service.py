@@ -84,10 +84,13 @@ def list_clips(
 
 def get_clip(root: Path, clip_id: str) -> ClipDetail:
     """Return the full detail contract for one clip, or raise ``CatalogError`` if not found."""
+    from clipfetch.services import quality_service
+
     record = find_clip(root, clip_id)
     with Catalog.open(root) as catalog:
         topics = catalog.topic_names(record.platform, record.clip_id)
-    return clip_detail(record, topics=topics)
+        details = catalog.get_media_details(record.platform, record.clip_id)
+    return clip_detail(record, topics=topics, media=quality_service.media_view(details))
 
 
 __all__ = [

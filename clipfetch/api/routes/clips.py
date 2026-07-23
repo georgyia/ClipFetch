@@ -76,3 +76,18 @@ def get_clip(clip_id: str, root: ActiveLibraryRootDep) -> dict[str, Any]:
         raise ApiException(
             404, "clip_not_found", str(err), recovery_actions=("open_library",)
         ) from err
+
+
+@router.get("/{clip_id}/related")
+def get_related(
+    clip_id: str,
+    root: ActiveLibraryRootDep,
+    limit: Annotated[int, Query(ge=1, le=50)] = 12,
+) -> dict[str, Any]:
+    from clipfetch.services import ranking_service
+
+    try:
+        items = ranking_service.recommend_related(root, clip_id, limit=limit)
+    except CatalogError as err:
+        raise ApiException(404, "clip_not_found", str(err)) from err
+    return {"items": [item.to_dict() for item in items]}

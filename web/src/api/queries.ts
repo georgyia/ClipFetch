@@ -10,7 +10,9 @@ import type {
   Bootstrap,
   ClipDetail,
   ClipPage,
+  ClipSummary,
   CollectionSummary,
+  Diagnostics,
   HomeResponse,
   Job,
   PlaybackView,
@@ -84,6 +86,13 @@ export function useCancelJob() {
   });
 }
 
+export function useDiagnostics() {
+  return useQuery({
+    queryKey: ["diagnostics"],
+    queryFn: () => apiGet<Diagnostics>("/api/v1/diagnostics"),
+  });
+}
+
 export function useHome() {
   return useQuery({
     queryKey: ["home"],
@@ -146,6 +155,16 @@ export function useClipDetail(clipId: string | undefined) {
   return useQuery({
     queryKey: ["clip", clipId],
     queryFn: () => apiGet<ClipDetail>(`/api/v1/clips/${encodeURIComponent(clipId ?? "")}`),
+    enabled: Boolean(clipId),
+  });
+}
+
+/** Deterministic "more like this" recommendations for a clip. */
+export function useRelated(clipId: string | undefined) {
+  return useQuery({
+    queryKey: ["related", clipId],
+    queryFn: () =>
+      apiGet<{ items: ClipSummary[] }>(`/api/v1/clips/${encodeURIComponent(clipId ?? "")}/related`),
     enabled: Boolean(clipId),
   });
 }

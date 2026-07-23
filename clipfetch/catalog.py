@@ -15,7 +15,7 @@ from clipfetch.model import Clip, ClipMetadata
 
 CATALOG_DIR = ".clipfetch"
 CATALOG_NAME = "catalog.sqlite3"
-CURRENT_SCHEMA_VERSION = 8
+CURRENT_SCHEMA_VERSION = 9
 
 _VIDEO_NAME = re.compile(r"^(reel|tiktok|short)_\d+_(.+)\.mp4$")
 _PLATFORM_FOR_NOUN = {"reel": "instagram", "tiktok": "tiktok", "short": "youtube"}
@@ -331,6 +331,13 @@ def _migration_8(connection: sqlite3.Connection) -> None:
     )
 
 
+def _migration_9(connection: sqlite3.Connection) -> None:
+    # Speed per-clip topic lookups (clip detail, recommendations) and the batched library scan.
+    connection.execute(
+        "CREATE INDEX topic_assignment_clip_idx ON topic_assignments(platform, clip_id)"
+    )
+
+
 MIGRATIONS: dict[int, Migration] = {
     1: _migration_1,
     2: _migration_2,
@@ -340,6 +347,7 @@ MIGRATIONS: dict[int, Migration] = {
     6: _migration_6,
     7: _migration_7,
     8: _migration_8,
+    9: _migration_9,
 }
 
 
@@ -614,6 +622,14 @@ class Catalog:
         manual = {item.topic for item in assignments if item.provenance == "manual"}
         generated = {item.topic for item in assignments if item.provenance == "model"}
         return tuple(sorted(manual | generated))
+
+    def all_topic_names(self) -> dict[tuple[str, str], tuple[str, ...]]:
+        """Topic names for every clip in a single query, avoiding an N+1 during library scans."""
+        grouped: dict[tuple[str, str], set[str]] = {}
+        for item in self.topic_assignments():
+            if item.provenance in ("manual", "model"):
+                grouped.setdefault((item.platform, item.clip_id), set()).add(item.topic)
+        return {key: tuple(sorted(value)) for key, value in grouped.items()}
 
     def replace_model_topics(
         self, platform: str, clip_id: str, assignments: list[TopicAssignment]
@@ -898,6 +914,20 @@ class Catalog:
             error=row["error"],
             generated_at=row["generated_at"],
         )
+
+    def clip_ids_by_min_height(self, min_height: int, *, limit: int = 48) -> list[str]:
+        """Available clips whose probed height is at least ``min_height``, newest first."""
+        rows = self._connection.execute(
+            """
+            SELECT d.clip_id FROM media_details d
+            JOIN clips c ON c.platform = d.platform AND c.clip_id = d.clip_id
+            WHERE d.status = 'ok' AND d.height >= ? AND c.available = 1
+            ORDER BY c.downloaded_at DESC, d.clip_id
+            LIMIT ?
+            """,
+            (min_height, max(1, limit)),
+        ).fetchall()
+        return [row["clip_id"] for row in rows]
 
     def store_media_details(self, details: MediaDetails) -> None:
         with self._lock, self._connection:

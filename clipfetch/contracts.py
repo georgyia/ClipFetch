@@ -76,6 +76,8 @@ class ClipDetail:
     transcript_language: str | None
     has_comments: bool
     comment_status: str | None
+    #: Probed technical media details and derived quality tier, or ``None`` if not probed yet.
+    media: dict[str, Any] | None = None
 
     def to_dict(self) -> dict[str, Any]:
         value = dict(self.summary.to_dict())
@@ -89,6 +91,7 @@ class ClipDetail:
                 "transcript_language": self.transcript_language,
                 "has_comments": self.has_comments,
                 "comment_status": self.comment_status,
+                "media": self.media,
             }
         )
         return value
@@ -152,7 +155,12 @@ def clip_summary(record: CatalogRecord, *, topics: Sequence[str] = ()) -> ClipSu
     )
 
 
-def clip_detail(record: CatalogRecord, *, topics: Sequence[str] = ()) -> ClipDetail:
+def clip_detail(
+    record: CatalogRecord,
+    *,
+    topics: Sequence[str] = (),
+    media: dict[str, Any] | None = None,
+) -> ClipDetail:
     """Build a :class:`ClipDetail`, reporting enrichment presence without inlining bodies."""
     return ClipDetail(
         summary=clip_summary(record, topics=topics),
@@ -163,4 +171,5 @@ def clip_detail(record: CatalogRecord, *, topics: Sequence[str] = ()) -> ClipDet
         transcript_language=record.transcript_language,
         has_comments=record.comment_text is not None,
         comment_status=record.comment_status,
+        media=media,
     )

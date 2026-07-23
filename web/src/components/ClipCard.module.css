@@ -5,6 +5,9 @@
   text-decoration: none;
   color: inherit;
   border-radius: var(--radius-card);
+  /* Skip render/layout of off-screen cards so large grids (1k–25k clips) stay cheap. */
+  content-visibility: auto;
+  contain-intrinsic-size: auto 320px;
 }
 
 .card:focus-visible {
@@ -32,6 +35,17 @@
 .card:hover .poster,
 .card:focus-visible .poster {
   transform: scale(1.03);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .poster {
+    transition: none;
+  }
+
+  .card:hover .poster,
+  .card:focus-visible .poster {
+    transform: none;
+  }
 }
 
 .unavailable .poster {

@@ -88,7 +88,8 @@
   font-size: 18px;
   cursor: pointer;
   padding: var(--space-2);
-  min-width: 40px;
+  min-width: 44px;
+  min-height: 44px; /* WCAG 2.5.8 target size */
 }
 
 .iconButton:disabled {

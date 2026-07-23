@@ -16,7 +16,12 @@ from clipfetch.appstate import AppState
 from clipfetch.catalog import CatalogError
 from clipfetch.collections import CollectionError
 from clipfetch.contracts import ClipPage, ClipSummary
-from clipfetch.services import catalog_service, collection_service, topic_service
+from clipfetch.services import (
+    catalog_service,
+    collection_service,
+    quality_service,
+    topic_service,
+)
 from clipfetch.topics import TopicError
 
 DEFAULT_RAIL_LIMIT = 12
@@ -142,6 +147,12 @@ def build_home(
     if favorite_items:
         rails.append(
             Rail("favorites", "Favorites", "favorites", "/library/favorites", favorite_items, None)
+        )
+
+    hq_items = _summaries_from_ids(root, quality_service.high_quality_ids(root, limit=rail_limit))
+    if hq_items:
+        rails.append(
+            Rail("high_quality", "High-Quality Picks", "quality", "/library/recent", hq_items, None)
         )
 
     rails.extend(_topic_rails(root, rail_limit))

@@ -22,6 +22,7 @@ from clipfetch.api.routes import (
     bootstrap,
     clips,
     collections,
+    diagnostics,
     favorites,
     home,
     jobs,
@@ -82,6 +83,7 @@ def create_app(appstate: AppState | None = None) -> FastAPI:
     app.include_router(clips.router)
     app.include_router(topics.router)
     app.include_router(collections.router)
+    app.include_router(diagnostics.router)
     app.include_router(favorites.router)
     app.include_router(home.router)
     app.include_router(jobs.router)
