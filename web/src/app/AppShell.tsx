@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import styles from "./AppShell.module.css";
 import { LibrarySelector } from "./LibrarySelector";
 import { Nav } from "./Nav";
+import { RouteAnnouncer } from "./RouteAnnouncer";
 
 export interface AppShellProps {
   children: ReactNode;
@@ -15,6 +16,7 @@ export function AppShell({ children }: AppShellProps) {
       <a className="skip-link" href="#main">
         Skip to content
       </a>
+      <RouteAnnouncer />
       <header className={styles.header}>
         <Link to="/" className={styles.brand}>
           <span className={styles.brandMark}>◐</span> ClipFetch <span>Watch</span>

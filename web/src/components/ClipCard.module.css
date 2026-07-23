@@ -34,6 +34,17 @@
   transform: scale(1.03);
 }
 
+@media (prefers-reduced-motion: reduce) {
+  .poster {
+    transition: none;
+  }
+
+  .card:hover .poster,
+  .card:focus-visible .poster {
+    transform: none;
+  }
+}
+
 .unavailable .poster {
   filter: grayscale(1) brightness(0.6);
 }

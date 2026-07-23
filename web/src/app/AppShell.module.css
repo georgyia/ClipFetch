@@ -107,6 +107,8 @@
   gap: var(--space-1);
   font-size: 10px;
   padding: var(--space-2) var(--space-3);
+  min-height: 44px; /* WCAG 2.5.8 target size */
+  justify-content: center;
 }
 
 .content {
