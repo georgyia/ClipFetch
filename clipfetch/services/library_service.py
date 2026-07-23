@@ -13,7 +13,7 @@ from pathlib import Path
 from typing import Any
 
 from clipfetch.appstate import AppState, LibraryEntry
-from clipfetch.catalog import CATALOG_DIR, CATALOG_NAME, Catalog, CatalogError
+from clipfetch.catalog import CATALOG_DIR, CATALOG_NAME, Catalog, CatalogError, index_library
 
 
 class LibraryServiceError(RuntimeError):
@@ -98,6 +98,27 @@ def activate_library(appstate: AppState, library_id: str) -> LibrarySummary:
 
 def unregister_library(appstate: AppState, library_id: str) -> None:
     appstate.unregister_library(library_id)
+
+
+def rescan_library(appstate: AppState, library_id: str) -> dict[str, Any]:
+    """Re-index a library from disk so files added out-of-band (or by a download) appear.
+
+    Reconciles the catalog with the media files on disk via ``index_library`` and returns the
+    refreshed library summary plus a redacted scan report (counts only, no paths).
+    """
+    entry = appstate.get_library(library_id)
+    report = index_library(Path(entry.root_path))
+    summary = _summary(appstate.get_library(library_id), _active_id(appstate))
+    return {
+        "library": summary.to_dict(),
+        "report": {
+            "scanned": report.scanned,
+            "inserted": report.inserted,
+            "updated": report.updated,
+            "unchanged": report.unchanged,
+            "missing": report.missing,
+        },
+    }
 
 
 def active_library(appstate: AppState) -> LibrarySummary | None:

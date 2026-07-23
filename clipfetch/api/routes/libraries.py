@@ -14,6 +14,7 @@ from pydantic import BaseModel, Field
 from clipfetch.api.dependencies import AppStateDep
 from clipfetch.api.errors import ApiException
 from clipfetch.appstate import AppStateError
+from clipfetch.catalog import CatalogError
 from clipfetch.services import library_service
 from clipfetch.services.library_service import LibraryServiceError
 
@@ -55,6 +56,16 @@ def activate_library(library_id: str, appstate: AppStateDep) -> dict[str, Any]:
         return library_service.activate_library(appstate, library_id).to_dict()
     except AppStateError as err:
         raise ApiException(404, "library_not_found", str(err)) from err
+
+
+@router.post("/{library_id}/rescan")
+def rescan_library(library_id: str, appstate: AppStateDep) -> dict[str, Any]:
+    try:
+        return library_service.rescan_library(appstate, library_id)
+    except AppStateError as err:
+        raise ApiException(404, "library_not_found", str(err)) from err
+    except CatalogError as err:
+        raise ApiException(409, "rescan_failed", str(err)) from err
 
 
 @router.delete("/{library_id}", status_code=204)
