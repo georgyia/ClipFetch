@@ -128,8 +128,21 @@ export function ClipDetailPage() {
           <dd>{clip.platform}</dd>
           <dt>Quality</dt>
           <dd>
-            <QualityBadge tier={clip.metadata_state} />
+            <QualityBadge
+              tier={clip.media?.tier.slug ?? "unknown"}
+              label={clip.media?.tier.label}
+              reason={clip.media?.tier.reason}
+            />
           </dd>
+          {clip.media?.height ? (
+            <>
+              <dt>Resolution</dt>
+              <dd>
+                {clip.media.width ?? "?"}×{clip.media.height}
+                {clip.media.video_codec ? ` · ${clip.media.video_codec}` : ""}
+              </dd>
+            </>
+          ) : null}
           {formatDuration(clip.duration_seconds) ? (
             <>
               <dt>Duration</dt>

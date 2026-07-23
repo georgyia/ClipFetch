@@ -899,6 +899,20 @@ class Catalog:
             generated_at=row["generated_at"],
         )
 
+    def clip_ids_by_min_height(self, min_height: int, *, limit: int = 48) -> list[str]:
+        """Available clips whose probed height is at least ``min_height``, newest first."""
+        rows = self._connection.execute(
+            """
+            SELECT d.clip_id FROM media_details d
+            JOIN clips c ON c.platform = d.platform AND c.clip_id = d.clip_id
+            WHERE d.status = 'ok' AND d.height >= ? AND c.available = 1
+            ORDER BY c.downloaded_at DESC, d.clip_id
+            LIMIT ?
+            """,
+            (min_height, max(1, limit)),
+        ).fetchall()
+        return [row["clip_id"] for row in rows]
+
     def store_media_details(self, details: MediaDetails) -> None:
         with self._lock, self._connection:
             self._connection.execute(

@@ -41,6 +41,25 @@ export interface ClipSummary {
   source_url: string | null;
 }
 
+export interface QualityTier {
+  slug: string;
+  label: string;
+  reason: string;
+}
+
+export interface MediaBlock {
+  tier: QualityTier;
+  status: string;
+  width?: number | null;
+  height?: number | null;
+  duration_seconds?: number | null;
+  video_codec?: string | null;
+  audio_codec?: string | null;
+  bitrate?: number | null;
+  container?: string | null;
+  compatible?: boolean | null;
+}
+
 export interface ClipDetail extends ClipSummary {
   schema_version: number;
   shares: number | null;
@@ -50,6 +69,7 @@ export interface ClipDetail extends ClipSummary {
   transcript_language: string | null;
   has_comments: boolean;
   comment_status: string | null;
+  media: MediaBlock | null;
 }
 
 export interface ClipPage {

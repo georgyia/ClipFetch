@@ -15,6 +15,13 @@ const DETAIL = {
   transcript_language: "en",
   has_comments: false,
   comment_status: null,
+  media: {
+    tier: { slug: "full_hd", label: "Full HD", reason: "1080x1920 source" },
+    status: "ok",
+    width: 1080,
+    height: 1920,
+    video_codec: "h264",
+  },
 };
 
 const TOPIC_CLIPS = {
@@ -67,6 +74,9 @@ test("shows metadata, a watch link, and technical details", async () => {
   expect(screen.getByRole("link", { name: /Watch/ })).toHaveAttribute("href", "/watch/IG_COOK1");
   expect(screen.getByText("4.2 MB")).toBeInTheDocument();
   expect(screen.getByText("ready")).toBeInTheDocument();
+  // Probed technical quality tier and resolution.
+  expect(screen.getByText("Full HD")).toBeInTheDocument();
+  expect(screen.getByText(/1080×1920/)).toBeInTheDocument();
 });
 
 test("shows a related rail excluding the current clip", async () => {
