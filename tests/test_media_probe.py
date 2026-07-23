@@ -55,7 +55,7 @@ def test_probe_file_without_ffprobe_is_unknown(tmp_path, monkeypatch):
 def test_migration_reaches_version_8(tmp_path):
     build_fixture_library(tmp_path / "lib")
     with Catalog.open(tmp_path / "lib") as catalog:
-        assert catalog.schema_version == 8
+        assert catalog.schema_version == 9
 
 
 def test_media_details_round_trip(tmp_path):

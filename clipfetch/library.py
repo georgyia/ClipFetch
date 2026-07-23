@@ -90,10 +90,8 @@ def query_library(
         raise CatalogError(f"library directory does not exist: {root.resolve()}")
     with Catalog.open(root) as catalog:
         records = [_refresh_presence(root, record) for record in catalog.all()]
-        assigned_topics = {
-            (record.platform, record.clip_id): catalog.topic_names(record.platform, record.clip_id)
-            for record in records
-        }
+        # One query for all topic assignments instead of one per record (N+1) — matters at scale.
+        assigned_topics = catalog.all_topic_names()
     matched: list[CatalogRecord] = []
     unknown_count = 0
     for record in records:
