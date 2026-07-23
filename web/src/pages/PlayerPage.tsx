@@ -20,7 +20,8 @@ const SAVE_INTERVAL_MS = 5000;
 export function PlayerPage() {
   const { id = "" } = useParams();
   const navigate = useNavigate();
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [queueOpen, setQueueOpen] = useState(false);
   const videoRef = useRef<HTMLVideoElement>(null);
 
   const { data: clip } = useClipDetail(id);
@@ -35,11 +36,12 @@ export function PlayerPage() {
     (item) => item.available,
   );
   // Shuffle mode reorders the queue with a URL-carried seed so prev/next stays stable across hops.
-  const shuffleSeed = searchParams.get("shuffle") === "1" ? Number(searchParams.get("seed")) : 0;
-  const order = shuffleSeed ? seededShuffle(available, shuffleSeed) : available;
+  const shuffleOn = searchParams.get("shuffle") === "1";
+  const order = shuffleOn ? seededShuffle(available, Number(searchParams.get("seed"))) : available;
   const index = order.findIndex((item) => item.id === id);
   const prevId = index > 0 ? order[index - 1].id : null;
   const nextId = index >= 0 && index < order.length - 1 ? order[index + 1].id : null;
+  const upcoming = index >= 0 ? order.slice(index + 1) : [];
 
   const [playing, setPlaying] = useState(true);
   const [muted, setMuted] = useState(false);
@@ -106,6 +108,19 @@ export function PlayerPage() {
     [navigate, searchParams],
   );
 
+  // Toggle shuffle in place, minting a fresh seed so the reshuffle is stable for the session.
+  const toggleShuffle = useCallback(() => {
+    const next = new URLSearchParams(searchParams);
+    if (next.get("shuffle") === "1") {
+      next.delete("shuffle");
+      next.delete("seed");
+    } else {
+      next.set("shuffle", "1");
+      next.set("seed", String(Math.floor(Math.random() * 1_000_000_000)));
+    }
+    setSearchParams(next, { replace: true });
+  }, [searchParams, setSearchParams]);
+
   // Keyboard map. Ignored while a form control has focus.
   useEffect(() => {
     function onKey(event: KeyboardEvent) {
@@ -134,6 +149,12 @@ export function PlayerPage() {
         case "p":
           goTo(prevId);
           break;
+        case "s":
+          toggleShuffle();
+          break;
+        case "q":
+          setQueueOpen((value) => !value);
+          break;
         case "Escape":
           navigate(-1);
           break;
@@ -143,7 +164,7 @@ export function PlayerPage() {
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [togglePlay, seekBy, goTo, nextId, prevId, navigate]);
+  }, [togglePlay, seekBy, goTo, nextId, prevId, navigate, toggleShuffle]);
 
   // Reset transient state and per-clip progress bookkeeping when the clip changes.
   // biome-ignore lint/correctness/useExhaustiveDependencies: id is the intended reset trigger
@@ -284,12 +305,69 @@ export function PlayerPage() {
           >
             {muted ? "🔇" : "🔊"}
           </button>
+          <button
+            type="button"
+            className={`${styles.iconButton} ${shuffleOn ? styles.active : ""}`.trim()}
+            onClick={toggleShuffle}
+            aria-label="Shuffle"
+            aria-pressed={shuffleOn}
+          >
+            🔀
+          </button>
+          <button
+            type="button"
+            className={`${styles.iconButton} ${queueOpen ? styles.active : ""}`.trim()}
+            onClick={() => setQueueOpen((value) => !value)}
+            aria-label="Up next"
+            aria-expanded={queueOpen}
+          >
+            ☰
+          </button>
           <span className={styles.spacer} />
           <span className={styles.time}>
             {formatDuration(current)} / {formatDuration(duration)}
           </span>
         </div>
       </div>
+
+      {queueOpen ? (
+        <aside className={styles.queue} aria-label="Up next" data-testid="up-next">
+          <h2 className={styles.queueTitle}>Up next{shuffleOn ? " · shuffled" : ""}</h2>
+          {upcoming.length === 0 ? (
+            <p className={styles.queueEmpty}>You're at the end of the queue.</p>
+          ) : (
+            <ol className={styles.queueList}>
+              {upcoming.map((item) => (
+                <li key={item.id}>
+                  <button
+                    type="button"
+                    className={styles.queueItem}
+                    onClick={() => {
+                      setQueueOpen(false);
+                      goTo(item.id);
+                    }}
+                  >
+                    {item.caption?.trim() || item.author || item.id}
+                  </button>
+                </li>
+              ))}
+            </ol>
+          )}
+        </aside>
+      ) : null}
+
+      {/* Warm the next clip's media so advancing is gapless. */}
+      {nextId ? (
+        <video
+          className={styles.prefetch}
+          src={mediaUrl(nextId)}
+          preload="auto"
+          muted
+          aria-hidden="true"
+          tabIndex={-1}
+          data-testid="prefetch-next"
+        />
+      ) : null}
     </section>
   );
 }

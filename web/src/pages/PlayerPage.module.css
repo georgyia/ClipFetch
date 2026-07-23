@@ -106,3 +106,84 @@
 .spacer {
   flex: 1;
 }
+
+.active {
+  color: var(--color-accent);
+}
+
+/* Up-next drawer: overlays the right edge on desktop, the full bottom sheet on narrow screens. */
+.queue {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: min(360px, 88vw);
+  overflow-y: auto;
+  padding: var(--space-6) var(--space-5);
+  background: var(--color-surface);
+  border-left: 1px solid var(--color-border);
+  animation: queue-in 160ms ease-out;
+}
+
+@keyframes queue-in {
+  from {
+    transform: translateX(12px);
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .queue {
+    animation: none;
+  }
+}
+
+.queueTitle {
+  margin: 0 0 var(--space-4);
+  font: var(--text-label);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--color-text-secondary);
+}
+
+.queueEmpty {
+  color: var(--color-text-muted);
+  font: var(--text-label);
+}
+
+.queueList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.queueItem {
+  width: 100%;
+  text-align: left;
+  padding: var(--space-3) var(--space-4);
+  min-height: 44px;
+  background: transparent;
+  border: 0;
+  border-radius: var(--radius-control);
+  color: var(--color-text);
+  cursor: pointer;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.queueItem:hover {
+  background: var(--color-surface-hover);
+}
+
+/* Off-screen element that only warms the browser cache for the next clip. */
+.prefetch {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
