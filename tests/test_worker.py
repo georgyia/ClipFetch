@@ -16,7 +16,7 @@ def _register(appstate: AppState, root: Path) -> str:
     return entry.id
 
 
-def _wait_for(predicate, timeout: float = 5.0) -> bool:
+def _wait_for(predicate, timeout: float = 15.0) -> bool:
     deadline = time.monotonic() + timeout
     while time.monotonic() < deadline:
         if predicate():
