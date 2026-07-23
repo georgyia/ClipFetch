@@ -22,6 +22,7 @@ export function TopicPage() {
         query={query}
         emptyTitle="No clips in this topic"
         emptyDescription="Clips tagged with this topic will appear here."
+        queueContext={{ from: "topic", key: slug }}
       />
     </section>
   );

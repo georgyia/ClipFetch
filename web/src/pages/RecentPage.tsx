@@ -19,6 +19,7 @@ export function RecentPage() {
         query={query}
         emptyTitle="Your library is empty"
         emptyDescription="Download some clips with the ClipFetch CLI to see them here."
+        queueContext={{ from: "recent" }}
       />
     </section>
   );

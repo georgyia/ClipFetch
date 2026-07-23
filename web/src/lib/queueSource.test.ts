@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest";
-import { parseQueueSource, queueContextParams, watchLink } from "./queueSource";
+import { parseQueueSource, queueContextParams, seededShuffle, watchLink } from "./queueSource";
 
 function path(params: string, cursor: string | null = null): string {
   return parseQueueSource(new URLSearchParams(params)).buildPath(cursor);
@@ -66,5 +66,23 @@ describe("watchLink round-trips through parseQueueSource", () => {
     expect(ctx.get("sort")).toBe("likes");
     expect(ctx.get("topic")).toBe("cooking");
     expect(ctx.get("irrelevant")).toBeNull();
+  });
+});
+
+describe("seededShuffle", () => {
+  const items = ["a", "b", "c", "d", "e", "f", "g", "h"];
+
+  test("is a permutation (same members, no loss)", () => {
+    const shuffled = seededShuffle(items, 42);
+    expect([...shuffled].sort()).toEqual([...items].sort());
+    expect(shuffled).not.toBe(items); // does not mutate the input
+  });
+
+  test("is deterministic for a given seed", () => {
+    expect(seededShuffle(items, 123)).toEqual(seededShuffle(items, 123));
+  });
+
+  test("different seeds generally give different orders", () => {
+    expect(seededShuffle(items, 1)).not.toEqual(seededShuffle(items, 2));
   });
 });

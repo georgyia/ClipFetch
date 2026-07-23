@@ -3,7 +3,7 @@ import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { useClipDetail, useClipList, usePlayback, useSavePlayback } from "../api/queries";
 import { mediaUrl } from "../api/types";
 import { formatDuration } from "../lib/format";
-import { parseQueueSource } from "../lib/queueSource";
+import { parseQueueSource, seededShuffle } from "../lib/queueSource";
 import styles from "./PlayerPage.module.css";
 
 // Persist progress at most this often while playing; also flushed on pause, end, and unmount.
@@ -31,9 +31,12 @@ export function PlayerPage() {
   const source = parseQueueSource(searchParams);
   const queue = useClipList(source.key, source.buildPath);
 
-  const order = (queue.data?.pages.flatMap((page) => page.items) ?? []).filter(
+  const available = (queue.data?.pages.flatMap((page) => page.items) ?? []).filter(
     (item) => item.available,
   );
+  // Shuffle mode reorders the queue with a URL-carried seed so prev/next stays stable across hops.
+  const shuffleSeed = searchParams.get("shuffle") === "1" ? Number(searchParams.get("seed")) : 0;
+  const order = shuffleSeed ? seededShuffle(available, shuffleSeed) : available;
   const index = order.findIndex((item) => item.id === id);
   const prevId = index > 0 ? order[index - 1].id : null;
   const nextId = index >= 0 && index < order.length - 1 ? order[index + 1].id : null;

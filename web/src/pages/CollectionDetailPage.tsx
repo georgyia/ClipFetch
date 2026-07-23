@@ -23,6 +23,7 @@ export function CollectionDetailPage() {
         query={query}
         emptyTitle="No clips match this collection"
         emptyDescription="Adjust the collection's filters to include more clips."
+        queueContext={{ from: "collection", key: id }}
       />
     </section>
   );

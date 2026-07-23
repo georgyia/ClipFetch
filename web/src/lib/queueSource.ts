@@ -86,15 +86,37 @@ export function queueContextParams(context: QueueContext): URLSearchParams {
   return params;
 }
 
-/** A /watch link opening `clipId` while preserving the queue context (optionally shuffled). */
+/** A /watch link opening `clipId` while preserving the queue context (optionally shuffled).
+ *
+ * A shuffle seed is carried in the URL so the shuffled order is stable across prev/next and a
+ * refresh — every clip in the session shares the same seed.
+ */
 export function watchLink(
   clipId: string,
   context: QueueContext,
-  options: { shuffle?: boolean } = {},
+  options: { shuffle?: boolean; seed?: number } = {},
 ): string {
   const params = queueContextParams(context);
   if (options.shuffle) {
     params.set("shuffle", "1");
+    params.set("seed", String(options.seed ?? Math.floor(Math.random() * 1_000_000_000)));
   }
   return `/watch/${encodeURIComponent(clipId)}?${params.toString()}`;
+}
+
+/** Deterministic Fisher–Yates shuffle (mulberry32) — same seed and input give the same order. */
+export function seededShuffle<T>(items: readonly T[], seed: number): T[] {
+  const out = items.slice();
+  let state = (seed || 1) >>> 0;
+  const random = () => {
+    state = (state + 0x6d2b79f5) | 0;
+    let t = Math.imul(state ^ (state >>> 15), 1 | state);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+  for (let i = out.length - 1; i > 0; i--) {
+    const j = Math.floor(random() * (i + 1));
+    [out[i], out[j]] = [out[j], out[i]];
+  }
+  return out;
 }
