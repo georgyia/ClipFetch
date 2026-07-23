@@ -15,7 +15,7 @@ from clipfetch.model import Clip, ClipMetadata
 
 CATALOG_DIR = ".clipfetch"
 CATALOG_NAME = "catalog.sqlite3"
-CURRENT_SCHEMA_VERSION = 7
+CURRENT_SCHEMA_VERSION = 8
 
 _VIDEO_NAME = re.compile(r"^(reel|tiktok|short)_\d+_(.+)\.mp4$")
 _PLATFORM_FOR_NOUN = {"reel": "instagram", "tiktok": "tiktok", "short": "youtube"}
@@ -97,6 +97,27 @@ class MediaSignature:
     algorithm_version: str
     duration_seconds: float | None
     frame_hashes: tuple[int, ...]
+    status: str
+    error: str | None
+    generated_at: str
+
+
+@dataclass(frozen=True)
+class MediaDetails:
+    """Probed technical details for one specific file revision. Fields are NULL when unknown."""
+
+    platform: str
+    clip_id: str
+    file_size: int
+    file_mtime_ns: int
+    duration_seconds: float | None
+    width: int | None
+    height: int | None
+    video_codec: str | None
+    audio_codec: str | None
+    bitrate: int | None
+    container: str | None
+    compatible: bool | None
     status: str
     error: str | None
     generated_at: str
@@ -280,6 +301,36 @@ def _migration_7(connection: sqlite3.Connection) -> None:
     connection.execute("CREATE INDEX media_signature_hash_idx ON media_signatures(file_hash)")
 
 
+def _migration_8(connection: sqlite3.Connection) -> None:
+    # Probed technical media details for one specific file revision. Every field beyond the file
+    # identity is nullable: a probe that cannot determine a value leaves it NULL and the row's
+    # ``status`` records why (ok / unknown / error), so consumers degrade gracefully.
+    connection.execute(
+        """
+        CREATE TABLE media_details (
+            platform TEXT NOT NULL,
+            clip_id TEXT NOT NULL,
+            file_size INTEGER NOT NULL,
+            file_mtime_ns INTEGER NOT NULL,
+            duration_seconds REAL,
+            width INTEGER,
+            height INTEGER,
+            video_codec TEXT,
+            audio_codec TEXT,
+            bitrate INTEGER,
+            container TEXT,
+            compatible INTEGER,
+            status TEXT NOT NULL,
+            error TEXT,
+            generated_at TEXT NOT NULL,
+            PRIMARY KEY (platform, clip_id),
+            FOREIGN KEY (platform, clip_id) REFERENCES clips(platform, clip_id)
+                ON DELETE CASCADE
+        )
+        """
+    )
+
+
 MIGRATIONS: dict[int, Migration] = {
     1: _migration_1,
     2: _migration_2,
@@ -288,6 +339,7 @@ MIGRATIONS: dict[int, Migration] = {
     5: _migration_5,
     6: _migration_6,
     7: _migration_7,
+    8: _migration_8,
 }
 
 
@@ -818,6 +870,71 @@ class Catalog:
                     signature.status,
                     signature.error,
                     signature.generated_at,
+                ),
+            )
+
+    def get_media_details(self, platform: str, clip_id: str) -> MediaDetails | None:
+        row = self._connection.execute(
+            "SELECT * FROM media_details WHERE platform = ? AND clip_id = ?",
+            (platform, clip_id),
+        ).fetchone()
+        if row is None:
+            return None
+        compatible = row["compatible"]
+        return MediaDetails(
+            platform=row["platform"],
+            clip_id=row["clip_id"],
+            file_size=row["file_size"],
+            file_mtime_ns=row["file_mtime_ns"],
+            duration_seconds=row["duration_seconds"],
+            width=row["width"],
+            height=row["height"],
+            video_codec=row["video_codec"],
+            audio_codec=row["audio_codec"],
+            bitrate=row["bitrate"],
+            container=row["container"],
+            compatible=None if compatible is None else bool(compatible),
+            status=row["status"],
+            error=row["error"],
+            generated_at=row["generated_at"],
+        )
+
+    def store_media_details(self, details: MediaDetails) -> None:
+        with self._lock, self._connection:
+            self._connection.execute(
+                """
+                INSERT INTO media_details VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(platform, clip_id) DO UPDATE SET
+                    file_size = excluded.file_size,
+                    file_mtime_ns = excluded.file_mtime_ns,
+                    duration_seconds = excluded.duration_seconds,
+                    width = excluded.width,
+                    height = excluded.height,
+                    video_codec = excluded.video_codec,
+                    audio_codec = excluded.audio_codec,
+                    bitrate = excluded.bitrate,
+                    container = excluded.container,
+                    compatible = excluded.compatible,
+                    status = excluded.status,
+                    error = excluded.error,
+                    generated_at = excluded.generated_at
+                """,
+                (
+                    details.platform,
+                    details.clip_id,
+                    details.file_size,
+                    details.file_mtime_ns,
+                    details.duration_seconds,
+                    details.width,
+                    details.height,
+                    details.video_codec,
+                    details.audio_codec,
+                    details.bitrate,
+                    details.container,
+                    None if details.compatible is None else int(details.compatible),
+                    details.status,
+                    details.error,
+                    details.generated_at,
                 ),
             )
 
