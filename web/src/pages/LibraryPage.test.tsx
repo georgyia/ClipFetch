@@ -45,6 +45,19 @@ beforeEach(() => {
         libraries = libraries.map((l) => ({ ...l, is_active: true }));
         return new Response(JSON.stringify(libraries[0]), { status: 200 });
       }
+      if (url.includes("/rescan")) {
+        return new Response(
+          JSON.stringify({
+            library: makeLibrary({}),
+            report: { scanned: 5, inserted: 2, updated: 1, unchanged: 2, missing: 0 },
+          }),
+          { status: 200 },
+        );
+      }
+      if (url.includes("/libraries/") && method === "DELETE") {
+        libraries = [];
+        return new Response(null, { status: 204 });
+      }
       return new Response(JSON.stringify({ libraries }), { status: 200 });
     }),
   );
@@ -66,10 +79,10 @@ function renderPage() {
 }
 
 function lastCall(predicate: (url: string, init?: RequestInit) => boolean) {
-  return vi
+  const matches = vi
     .mocked(globalThis.fetch)
-    .mock.calls.filter(([u, init]) => predicate(String(u), init))
-    .at(-1);
+    .mock.calls.filter(([u, init]) => predicate(String(u), init));
+  return matches[matches.length - 1];
 }
 
 test("first run opens the add flow and lists folders from the sandbox root", async () => {
@@ -98,4 +111,31 @@ test("shows registered libraries with clip count and health", async () => {
   expect(await screen.findByText("My reels")).toBeInTheDocument();
   expect(screen.getByText(/42 clips · ok/)).toBeInTheDocument();
   expect(screen.getByText("Active")).toBeInTheDocument();
+});
+
+test("activates an inactive library", async () => {
+  libraries = [makeLibrary({ id: "other", display_name: "Archive", is_active: false })];
+  renderPage();
+  fireEvent.click(await screen.findByRole("button", { name: "Activate" }));
+  await waitFor(() => expect(lastCall((u) => u.includes("/other/activate"))).toBeDefined());
+});
+
+test("rescans a library and reports the counts", async () => {
+  libraries = [makeLibrary({})];
+  renderPage();
+  fireEvent.click(await screen.findByRole("button", { name: "Rescan" }));
+  expect(await screen.findByRole("status")).toHaveTextContent("2 new, 1 updated, 0 missing");
+});
+
+test("removing a library asks for confirmation and unregisters", async () => {
+  libraries = [makeLibrary({})];
+  const confirm = vi.spyOn(window, "confirm").mockReturnValue(true);
+  renderPage();
+  fireEvent.click(await screen.findByRole("button", { name: "Remove" }));
+  await waitFor(() =>
+    expect(
+      lastCall((u, init) => u.includes("/libraries/lib1") && init?.method === "DELETE"),
+    ).toBeDefined(),
+  );
+  confirm.mockRestore();
 });
