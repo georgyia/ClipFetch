@@ -164,6 +164,27 @@ export interface Account {
   connected: boolean;
 }
 
+export interface DirEntry {
+  name: string;
+  path: string;
+  is_library: boolean;
+}
+
+export interface DirListing {
+  cwd: string;
+  parent: string | null;
+  at_root: boolean;
+  entries: DirEntry[];
+}
+
+export interface RescanReport {
+  scanned: number;
+  inserted: number;
+  updated: number;
+  unchanged: number;
+  missing: number;
+}
+
 /** Media endpoints are addressed by clip id only; no filesystem paths ever reach the client. */
 export function posterUrl(clipId: string): string {
   return `/api/v1/clips/${encodeURIComponent(clipId)}/poster`;

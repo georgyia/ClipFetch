@@ -14,9 +14,12 @@ import type {
   ClipSummary,
   CollectionSummary,
   Diagnostics,
+  DirListing,
   HomeResponse,
   Job,
+  LibrarySummary,
   PlaybackView,
+  RescanReport,
   SearchResponse,
   TopicSummary,
 } from "./types";
@@ -50,6 +53,68 @@ export function useActivateLibrary() {
     onSuccess: () => {
       queryClient.invalidateQueries();
     },
+  });
+}
+
+/**
+ * Browse the server machine's directories to pick a library folder during onboarding. Sandboxed to
+ * the user's home directory server-side: directory names only, never file contents. A null path
+ * starts at home.
+ */
+export function useDirListing(path: string | null) {
+  return useQuery({
+    queryKey: ["fs-dirs", path],
+    queryFn: () => {
+      const query = path ? `?path=${encodeURIComponent(path)}` : "";
+      return apiGet<DirListing>(`/api/v1/fs/dirs${query}`);
+    },
+  });
+}
+
+/** Register a library folder, then refresh the registry. Errors surface the sanitized message. */
+export function useRegisterLibrary() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: { display_name: string; path: string }) =>
+      apiPost<LibrarySummary>("/api/v1/libraries", input),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["bootstrap"] });
+      queryClient.invalidateQueries({ queryKey: ["libraries"] });
+    },
+  });
+}
+
+/** Re-index a library from disk so files added out-of-band or by a download appear. */
+export function useRescanLibrary() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (libraryId: string) =>
+      apiPost<{ library: LibrarySummary; report: RescanReport }>(
+        `/api/v1/libraries/${encodeURIComponent(libraryId)}/rescan`,
+      ),
+    onSuccess: () => {
+      queryClient.invalidateQueries();
+    },
+  });
+}
+
+/** Remove a library's registration (never its files), then refresh the registry. */
+export function useUnregisterLibrary() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (libraryId: string) =>
+      apiDelete<unknown>(`/api/v1/libraries/${encodeURIComponent(libraryId)}`),
+    onSuccess: () => {
+      queryClient.invalidateQueries();
+    },
+  });
+}
+
+/** The full library registry (independent of the active-library-centric bootstrap payload). */
+export function useLibraries() {
+  return useQuery({
+    queryKey: ["libraries"],
+    queryFn: () => apiGet<{ libraries: LibrarySummary[] }>("/api/v1/libraries"),
   });
 }
 
