@@ -56,6 +56,17 @@ def test_download_requires_url(tmp_path):
     assert resp.json()["error"]["code"] == "invalid_job"
 
 
+def test_enqueue_feed_download_with_empty_url(tmp_path):
+    client, _ = _client(tmp_path)
+    resp = client.post(
+        "/api/v1/jobs", json={"kind": "download", "url": "", "count": 10, "quality": "high"}
+    )
+    assert resp.status_code == 201
+    body = resp.json()
+    assert body["source_permalink"] == ""
+    assert body["state"] == "queued"
+
+
 def test_unknown_kind_is_rejected(tmp_path):
     client, _ = _client(tmp_path)
     resp = client.post("/api/v1/jobs", json={"kind": "wat", "url": "https://x/p/1"})
