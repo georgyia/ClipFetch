@@ -1,0 +1,101 @@
+.picker {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-panel);
+  background: var(--color-surface);
+  padding: var(--space-4);
+}
+
+.crumbs {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font: var(--text-label);
+  color: var(--color-text-muted);
+  min-width: 0;
+}
+
+.cwd {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  direction: rtl; /* keep the tail (the folder you're in) visible when the path is long */
+  text-align: left;
+  flex: 1;
+  min-width: 0;
+}
+
+.list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: var(--space-1);
+  max-height: 280px;
+  overflow-y: auto;
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  width: 100%;
+  padding: var(--space-2) var(--space-3);
+  border: none;
+  border-radius: var(--radius-control);
+  background: transparent;
+  color: var(--color-text);
+  font: var(--text-body);
+  text-align: left;
+  cursor: pointer;
+}
+
+.row:hover,
+.row:focus-visible {
+  background: var(--color-surface-raised);
+}
+
+.icon {
+  flex: none;
+  color: var(--color-text-muted);
+}
+
+.name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+  min-width: 0;
+}
+
+.tag {
+  flex: none;
+  padding: 2px var(--space-2);
+  border-radius: var(--radius-pill);
+  font: var(--text-label);
+  background: color-mix(in srgb, var(--color-success) 20%, transparent);
+  color: var(--color-text);
+}
+
+.empty {
+  padding: var(--space-4);
+  text-align: center;
+  font: var(--text-label);
+  color: var(--color-text-muted);
+}
+
+.footer {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+}
+
+.hint {
+  font: var(--text-label);
+  color: var(--color-text-muted);
+  flex: 1;
+  min-width: 0;
+}

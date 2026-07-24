@@ -148,7 +148,9 @@ def enqueue(
     """Enqueue a job. Returns (view, created); ``created`` is False when an active job is reused."""
     if kind not in JOB_KINDS:
         raise JobServiceError(f"unknown job kind: {kind}")
-    if kind == "download" and not source_permalink:
+    # ``None`` means the field was omitted; ``""`` is the explicit "your feed" sentinel
+    # (see browser_source._target_from and the Downloads UI).
+    if kind == "download" and source_permalink is None:
         raise JobServiceError("a download job requires a source url")
 
     if kind == "download" and source_permalink is not None:
