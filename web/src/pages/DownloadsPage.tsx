@@ -11,6 +11,7 @@ import type { Account, Job } from "../api/types";
 import { Button } from "../components/Button";
 import { ErrorState } from "../components/ErrorState";
 import { LoadingState } from "../components/LoadingState";
+import { useToast } from "../components/Toast";
 import styles from "./DownloadsPage.module.css";
 
 const ACTIVE = new Set(["queued", "running"]);
@@ -135,6 +136,7 @@ export function DownloadsPage() {
   const jobs = useJobs();
   const accounts = useAccounts();
   const enqueue = useEnqueueJob();
+  const toast = useToast();
   const [source, setSource] = useState<"feed" | "account">("feed");
   const [handle, setHandle] = useState("");
   const [count, setCount] = useState("10");
@@ -148,11 +150,18 @@ export function DownloadsPage() {
     if (source === "account" && cleaned === "") {
       return;
     }
-    enqueue.mutate({
-      url: source === "account" ? `@${cleaned}` : "",
-      count: Number(count) || 1,
-      quality,
-    });
+    const target = source === "account" ? `@${cleaned}` : "your feed";
+    enqueue.mutate(
+      {
+        url: source === "account" ? `@${cleaned}` : "",
+        count: Number(count) || 1,
+        quality,
+      },
+      {
+        onSuccess: () => toast(`Queued a download from ${target}.`, { variant: "success" }),
+        onError: () => toast("Could not queue that download.", { variant: "error" }),
+      },
+    );
     setHandle("");
   }
 

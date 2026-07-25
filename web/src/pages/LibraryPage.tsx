@@ -12,6 +12,7 @@ import { Button } from "../components/Button";
 import { DirectoryPicker } from "../components/DirectoryPicker";
 import { ErrorState } from "../components/ErrorState";
 import { LoadingState } from "../components/LoadingState";
+import { useToast } from "../components/Toast";
 import styles from "./LibraryPage.module.css";
 
 // Library management surface. Add a library folder without touching the API (#136), and manage the
@@ -22,6 +23,7 @@ export function LibraryPage() {
   const activate = useActivateLibrary();
   const rescan = useRescanLibrary();
   const unregister = useUnregisterLibrary();
+  const toast = useToast();
 
   const [adding, setAdding] = useState(false);
   const [name, setName] = useState("");
@@ -47,6 +49,7 @@ export function LibraryPage() {
       await activate.mutateAsync(summary.id);
       setAdding(false);
       setName("");
+      toast(`Added “${summary.display_name}”.`, { variant: "success" });
     } catch {
       // Error is surfaced from register.error below; keep the picker open to retry.
     }
@@ -167,7 +170,10 @@ export function LibraryPage() {
                             `Remove "${library.display_name}" from ClipFetch? This unregisters it only — your files stay on disk.`,
                           )
                         ) {
-                          unregister.mutate(library.id);
+                          unregister.mutate(library.id, {
+                            onSuccess: () =>
+                              toast(`Removed “${library.display_name}”.`, { variant: "info" }),
+                          });
                         }
                       }}
                       disabled={busy}
