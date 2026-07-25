@@ -117,3 +117,58 @@ def test_ingested_clip_is_playable_through_catalog(tmp_path):
         records = catalog.all()
     assert len(records) == 1
     assert records[0].available is True
+
+
+def test_run_ingest_generates_a_poster_per_downloaded_clip(tmp_path):
+    root = tmp_path / "lib"
+    calls: list[tuple[str, str]] = []
+
+    def fake_poster(poster_root, platform, clip_id):
+        assert poster_root == root
+        calls.append((platform, clip_id))
+
+    result = run_ingest(
+        root,
+        permalink="https://x/p/1",
+        count=3,
+        quality=None,
+        provider=FakeSourceProvider(),
+        poster_fn=fake_poster,
+    )
+    assert [clip_id for _, clip_id in calls] == result.downloaded_ids
+    assert all(platform == "instagram" for platform, _ in calls)
+
+
+def test_poster_failures_never_fail_the_download(tmp_path):
+    root = tmp_path / "lib"
+
+    def boom(_root, _platform, _clip_id):
+        raise RuntimeError("ffmpeg exploded")
+
+    result = run_ingest(
+        root,
+        permalink="https://x/p/1",
+        count=2,
+        quality=None,
+        provider=FakeSourceProvider(),
+        poster_fn=boom,
+    )
+    # The download still completes and the clips are catalogued despite every poster failing.
+    assert result.count == 2
+    assert query_library(root, ClipFilter()).matched == 2
+
+
+def test_poster_phase_is_reported(tmp_path):
+    root = tmp_path / "lib"
+    phases: list[str] = []
+
+    run_ingest(
+        root,
+        permalink="https://x/p/1",
+        count=1,
+        quality=None,
+        provider=FakeSourceProvider(),
+        on_progress=lambda current, total, phase: phases.append(phase),
+        poster_fn=lambda *_: None,
+    )
+    assert "posters" in phases
