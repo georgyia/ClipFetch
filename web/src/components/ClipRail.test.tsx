@@ -1,6 +1,6 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
-import { expect, test } from "vitest";
+import { expect, test, vi } from "vitest";
 import { makeClip } from "../test/fixtures";
 import { ClipRail } from "./ClipRail";
 
@@ -33,6 +33,15 @@ test("arrow keys move focus between cards", () => {
   expect(second).toHaveFocus();
   fireEvent.keyDown(second, { key: "ArrowLeft" });
   expect(first).toHaveFocus();
+});
+
+test("paging chevron scrolls the track a page at a time", () => {
+  renderRail();
+  const track = screen.getByRole("list");
+  const scrollBy = vi.fn();
+  track.scrollBy = scrollBy;
+  fireEvent.click(screen.getByRole("button", { name: "Scroll Recently Added forward" }));
+  expect(scrollBy).toHaveBeenCalledWith(expect.objectContaining({ behavior: "smooth" }));
 });
 
 test("renders nothing when empty", () => {
