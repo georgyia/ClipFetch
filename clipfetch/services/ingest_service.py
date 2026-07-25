@@ -81,6 +81,8 @@ class IngestResult:
 
 ProgressFn = Callable[[int, int, str], None]
 CancelFn = Callable[[], bool]
+#: Generates a poster for one catalogued clip. Injectable so tests use a fake instead of ffmpeg.
+PosterFn = Callable[[Path, str, str], object]
 
 
 def run_ingest(
@@ -92,9 +94,16 @@ def run_ingest(
     provider: SourceProvider,
     on_progress: ProgressFn | None = None,
     cancel_check: CancelFn | None = None,
+    poster_fn: PosterFn | None = None,
 ) -> IngestResult:
-    """Fetch up to ``count`` clips and catalogue them, reporting progress and honoring cancels."""
+    """Fetch up to ``count`` clips and catalogue them, reporting progress and honoring cancels.
+
+    After the clips are written and the catalog connection closes, a poster is generated for each
+    (best-effort — a thumbnail failure never fails a completed download). ``poster_fn`` is
+    injectable so tests avoid ffmpeg; the default extracts a real frame via the poster service.
+    """
     result = IngestResult()
+    downloaded: list[tuple[str, str]] = []
     root.mkdir(parents=True, exist_ok=True)
     with Catalog.open(root) as catalog:
         for index, clip in enumerate(provider.fetch(permalink, count, quality)):
@@ -126,9 +135,41 @@ def run_ingest(
                 )
             )
             result.downloaded_ids.append(clip.clip_id)
+            downloaded.append((clip.platform, clip.clip_id))
             if on_progress is not None:
                 on_progress(index + 1, count, "downloading")
+
+    _generate_posters(root, downloaded, poster_fn=poster_fn, on_progress=on_progress, total=count)
     return result
+
+
+def _generate_posters(
+    root: Path,
+    clips: list[tuple[str, str]],
+    *,
+    poster_fn: PosterFn | None,
+    on_progress: ProgressFn | None,
+    total: int,
+) -> None:
+    """Extract a poster frame for each downloaded clip. Runs after the catalog write connection is
+    closed (poster generation opens its own read connection) and swallows every failure — a missing
+    thumbnail must never turn a finished download into a failed job."""
+    if not clips:
+        return
+    generate: PosterFn
+    if poster_fn is not None:
+        generate = poster_fn
+    else:
+        from clipfetch.services.poster_service import generate_poster
+
+        generate = generate_poster
+    if on_progress is not None:
+        on_progress(len(clips), total, "posters")
+    for platform, clip_id in clips:
+        try:
+            generate(root, platform, clip_id)
+        except Exception:  # noqa: BLE001 - best-effort enrichment, never fatal
+            continue
 
 
 def process_next_job(

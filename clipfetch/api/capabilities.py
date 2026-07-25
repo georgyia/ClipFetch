@@ -7,6 +7,7 @@ never imports the heavy modules themselves.
 
 from __future__ import annotations
 
+import shutil
 from importlib.util import find_spec
 from typing import Any
 
@@ -35,4 +36,11 @@ def capability_matrix() -> dict[str, dict[str, Any]]:
         if not available:
             entry["reason"] = "dependency_missing"
         matrix[name] = entry
+
+    # Real poster thumbnails are extracted with ffmpeg (a binary, not a Python module). Without it,
+    # downloads still work and clips fall back to the placeholder poster.
+    ffmpeg = shutil.which("ffmpeg") is not None
+    matrix["thumbnails"] = {"available": ffmpeg}
+    if not ffmpeg:
+        matrix["thumbnails"]["reason"] = "ffmpeg_missing"
     return matrix

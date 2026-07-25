@@ -57,6 +57,7 @@ def test_capabilities_matrix_shape(tmp_path):
         "transcription",
         "duplicate_analysis",
         "cookie_import",
+        "thumbnails",
     }
     for entry in caps.values():
         assert isinstance(entry["available"], bool)

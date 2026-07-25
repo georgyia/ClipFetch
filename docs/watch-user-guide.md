@@ -118,26 +118,34 @@ you watch.
 
 Shortcuts are ignored while a text field is focused, and reduced-motion preferences are respected.
 
-**Posters.** Thumbnails are generated with `ffmpeg` when it is available on your `PATH`; without it,
-clips still play — they just show a placeholder instead of a poster.
+**Posters.** A thumbnail is generated with `ffmpeg` for each clip as it downloads, when `ffmpeg` is
+on your `PATH`; without it, clips still play — they just show a placeholder instead of a poster.
+Settings → Capabilities shows whether **Thumbnails** are available in your environment.
 
 ---
 
 ## Downloads
 
-The Downloads page lists jobs and follows their progress live (phases, retries, cancellation, and
-sanitized failure reasons). Two things are worth understanding about the current preview:
+The Downloads page lists jobs and follows their progress live (phases — including a **posters**
+step — retries, cancellation, and sanitized failure reasons).
 
-- **Adding clips still happens through the CLI.** The live, browser-driven download source is not
-  wired into Watch yet, so a job enqueued against a real URL stays queued. Download with
-  `clipfetch -reels N` (or `-tiktoks N`), then `clipfetch library index <dir>` to make new clips
-  appear in Watch.
+- **Add clips from inside Watch.** First connect your account: Settings (or the Downloads page)
+  → **Connect Instagram** opens a browser window once for you to sign in; downloads then run
+  headless with that saved session. Then use the **Add reels** form to download your feed or a
+  single `@account` at a chosen count and quality. New clips appear automatically — no manual
+  re-index. If a job fails with *sign-in required*, the row offers a **Connect account** action.
+- **Instagram-first.** Instagram is fully supported. TikTok is experimental and anti-botted (use
+  the CLI's `-tiktoks N`); YouTube Shorts downloading is unavailable. The download form and platform
+  matrix surface these limits — nothing implies an unsupported platform works.
+- **Headless/remote servers.** UI-triggered sign-in needs a local display. When the server has no
+  display, connecting reports that clearly; sign in with the CLI instead, then downloads work.
 - **Demo mode shows the pipeline end to end.** Start the server with `clipfetch web --demo` and the
   background worker processes jobs with a deterministic **offline fake source** — no network, no
   sign-in. This is for trying the queue/worker/progress experience, not for real content.
 
 The worker starts and stops with the server, reaps stale job leases so a crash never strands a job,
-and only claims work when a source is configured (today: `--demo`).
+and only claims work when a source is configured (the real Instagram source by default, or the
+fake source under `--demo`).
 
 ---
 
@@ -162,10 +170,10 @@ and only claims work when a source is configured (today: `--demo`).
 |---|---|
 | Watch loads but says "serving the API only" | The UI bundle is not built. Run `npm --prefix web run build`, then restart `clipfetch web`. |
 | `The web interface needs extra packages` | Install the web extra: `pip install -e ".[web]"`. |
-| "No active library" on Home | Register and activate a library once via `/api/docs` (see [First run](#first-run)). |
-| Home is empty after activating | The catalog has no clips yet. Download with the CLI and run `clipfetch library index <dir>`. |
+| "No active library" on Home | Add and activate a library from the **Library** page (or via `/api/docs`); see [First run](#first-run). |
+| Home is empty after activating | The catalog has no clips yet. Connect your account and use **Add reels** on the Downloads page, or download with the CLI and **Rescan** the library. |
 | Address already in use | Another process holds the port. Start with `--port 9000` (or free port 8000). |
-| A download job stays "queued" | Expected in the preview unless you started with `--demo` — the live download source is not wired yet. Add clips with the CLI. |
+| A download job stays "queued" | The worker needs a source. Connect your account (Downloads → **Connect Instagram**), or start with `--demo` to run the offline fake source. |
 | Clips play but show no thumbnail | `ffmpeg` is not on your `PATH`. Install it to enable poster generation; playback is unaffected. |
 | Semantic search is unavailable | Install the semantic extra: `pip install -e ".[semantic]"` (Python 3.10+). The Settings page shows which capabilities are active. |
 
