@@ -2,8 +2,8 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { renderHook, waitFor } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
-import type { Job } from "./types";
 import { useJobs } from "./queries";
+import type { Job } from "./types";
 
 function makeJob(overrides: Partial<Job>): Job {
   return {

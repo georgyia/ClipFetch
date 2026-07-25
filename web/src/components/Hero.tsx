@@ -25,7 +25,7 @@ export function Hero({ clip, eyebrow = "Featured" }: HeroProps) {
 
   useEffect(() => {
     setPreview(false);
-    if (!clip.available || previewSuppressed()) {
+    if (!clip.id || !clip.available || previewSuppressed()) {
       return;
     }
     // A short beat before the billboard animates, so the page settles first.
