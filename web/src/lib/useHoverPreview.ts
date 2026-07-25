@@ -6,7 +6,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
  * When `matchMedia` is unavailable (tests, old runtimes) we allow it — the caller still gates on
  * whether media exists.
  */
-function prefersNoPreview(): boolean {
+export function previewSuppressed(): boolean {
   if (typeof window === "undefined" || typeof window.matchMedia !== "function") {
     return false;
   }
@@ -41,7 +41,7 @@ export function useHoverPreview(delayMs = 550): HoverPreview {
   }, []);
 
   const onPointerEnter = useCallback(() => {
-    if (prefersNoPreview()) {
+    if (previewSuppressed()) {
       return;
     }
     clear();
