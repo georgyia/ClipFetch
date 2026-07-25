@@ -1,6 +1,7 @@
 import { Link } from "react-router-dom";
-import { type ClipSummary, posterUrl } from "../api/types";
+import { type ClipSummary, mediaUrl, posterUrl } from "../api/types";
 import { compactCount, formatDuration } from "../lib/format";
+import { useHoverPreview } from "../lib/useHoverPreview";
 import styles from "./ClipCard.module.css";
 
 export interface ClipCardProps {
@@ -21,15 +22,28 @@ function subtitle(clip: ClipSummary): string {
   return parts.join(" · ");
 }
 
-/** Portrait clip poster with lazy image, quality/availability state, and progress. */
+/**
+ * Portrait clip poster with a Netflix-style hover preview: dwell on the card and its muted video
+ * plays inline over the poster, the card lifts, and a play affordance appears. Falls back to the
+ * static poster on touch, reduced-motion, or unavailable media.
+ */
 export function ClipCard({ clip, progress }: ClipCardProps) {
   const duration = formatDuration(clip.duration_seconds);
   const label = clip.caption?.trim() || clip.author || "Untitled clip";
   const clamped = progress == null ? null : Math.max(0, Math.min(1, progress));
+  const preview = useHoverPreview();
+  const showPreview = preview.active && clip.available;
   const wrapClass = `${styles.posterWrap} ${clip.available ? "" : styles.unavailable}`.trim();
 
   return (
-    <Link to={`/clip/${encodeURIComponent(clip.id)}`} className={styles.card} aria-label={label}>
+    <Link
+      to={`/clip/${encodeURIComponent(clip.id)}`}
+      className={styles.card}
+      aria-label={label}
+      onPointerEnter={preview.onPointerEnter}
+      onPointerLeave={preview.onPointerLeave}
+      onPointerCancel={preview.onPointerCancel}
+    >
       <div className={wrapClass}>
         <img
           className={styles.poster}
@@ -39,7 +53,26 @@ export function ClipCard({ clip, progress }: ClipCardProps) {
           decoding="async"
           draggable={false}
         />
-        <div className={styles.badges} />
+        {showPreview ? (
+          <video
+            className={styles.preview}
+            src={mediaUrl(clip.id)}
+            poster={posterUrl(clip.id)}
+            muted
+            loop
+            autoPlay
+            playsInline
+            preload="auto"
+            onCanPlay={(event) => {
+              event.currentTarget.play().catch(() => {});
+            }}
+            data-testid="hover-preview"
+          />
+        ) : null}
+        <div className={styles.hoverScrim} aria-hidden="true" />
+        <span className={styles.playBadge} aria-hidden="true">
+          ▶
+        </span>
         {clip.available ? null : <span className={styles.unavailableTag}>Media unavailable</span>}
         {duration ? <span className={styles.duration}>{duration}</span> : null}
         {clamped != null ? (

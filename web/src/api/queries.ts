@@ -5,6 +5,7 @@ import {
   useQuery,
   useQueryClient,
 } from "@tanstack/react-query";
+import { useEffect, useRef } from "react";
 import { apiDelete, apiGet, apiPost, apiPut } from "./client";
 import type {
   Account,
@@ -118,17 +119,50 @@ export function useLibraries() {
   });
 }
 
-/** Poll the job list. While any job is active, refetch on an interval as the SSE-free fallback. */
+/**
+ * Poll the job list. While any job is active, refetch on an interval as the SSE-free fallback.
+ * When a download job newly reaches `succeeded`, the freshly downloaded clips are already in the
+ * catalog, so invalidate the content caches — Home, library lists, search — to surface them without
+ * a manual rescan (#135).
+ */
 export function useJobs() {
-  return useQuery({
+  const queryClient = useQueryClient();
+  const settled = useRef<Set<string>>(new Set());
+  const primed = useRef(false);
+  const query = useQuery({
     queryKey: ["jobs"],
     queryFn: () => apiGet<{ jobs: Job[] }>("/api/v1/jobs"),
-    refetchInterval: (query) => {
-      const jobs = query.state.data?.jobs ?? [];
+    refetchInterval: (q) => {
+      const jobs = q.state.data?.jobs ?? [];
       const active = jobs.some((job) => job.state === "queued" || job.state === "running");
       return active ? 2000 : false;
     },
   });
+
+  useEffect(() => {
+    if (!query.data) {
+      return;
+    }
+    let landed = false;
+    for (const job of query.data.jobs) {
+      if (job.state === "succeeded" && !settled.current.has(job.id)) {
+        settled.current.add(job.id);
+        // The first poll primes the set with already-finished jobs; only downloads that complete
+        // while the app is open should trigger a refresh.
+        if (primed.current && job.result?.downloaded) {
+          landed = true;
+        }
+      }
+    }
+    primed.current = true;
+    if (landed) {
+      // Clip lists live under many keys (home, topic, collection, queue, search…); a completed
+      // download is rare, so refresh everything to guarantee the new clips surface.
+      queryClient.invalidateQueries();
+    }
+  }, [query.data, queryClient]);
+
+  return query;
 }
 
 export function useEnqueueJob() {

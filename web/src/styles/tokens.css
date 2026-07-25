@@ -60,6 +60,16 @@
   --text-body: 400 16px / 24px var(--font-sans);
   --text-label: 600 13px / 16px var(--font-sans);
   --shadow-raised: 0 6px 24px rgb(0 0 0 / 40%);
+  --shadow-card-hover: 0 18px 40px -12px rgb(0 0 0 / 65%), 0 0 0 1px rgb(255 255 255 / 6%);
+
+  /* Signature coral→violet gradient, used for the hero wash and accent flourishes. */
+  --gradient-accent: linear-gradient(
+    120deg,
+    var(--color-accent-pressed),
+    var(--color-accent-violet)
+  );
+  --gradient-fade-right: linear-gradient(90deg, rgb(7 8 11 / 0%), var(--color-bg));
+  --gradient-fade-left: linear-gradient(270deg, rgb(7 8 11 / 0%), var(--color-bg));
 }
 
 *,

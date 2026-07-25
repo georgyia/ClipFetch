@@ -27,6 +27,39 @@
   color: var(--color-text);
 }
 
+.viewport {
+  position: relative;
+}
+
+/* Edge fades hint that the row scrolls; toggled via the chevrons' visibility below. */
+.viewport::before,
+.viewport::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: var(--space-3);
+  width: var(--space-9);
+  z-index: 1;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 200ms ease-out;
+}
+
+.viewport::before {
+  left: 0;
+  background: var(--gradient-fade-left);
+}
+
+.viewport::after {
+  right: 0;
+  background: var(--gradient-fade-right);
+}
+
+.viewport:has(.chevronLeft[data-visible="true"])::before,
+.viewport:has(.chevronRight[data-visible="true"])::after {
+  opacity: 1;
+}
+
 .track {
   display: grid;
   grid-auto-flow: column;
@@ -34,17 +67,72 @@
   gap: var(--space-4);
   overflow-x: auto;
   scroll-snap-type: x proximity;
-  padding-bottom: var(--space-3);
-  scrollbar-width: thin;
+  /* Vertical room so cards that lift/scale on hover aren't clipped by the scroll container. */
+  padding: var(--space-3) 0;
+  scrollbar-width: none;
+}
+
+.track::-webkit-scrollbar {
+  display: none;
 }
 
 .track > * {
   scroll-snap-align: start;
 }
 
+.chevron {
+  position: absolute;
+  top: 0;
+  bottom: var(--space-3);
+  z-index: 2;
+  display: grid;
+  place-items: center;
+  width: var(--space-9);
+  border: none;
+  color: var(--color-text);
+  font-size: 28px;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 180ms ease-out;
+}
+
+.chevronLeft {
+  left: 0;
+  background: linear-gradient(90deg, rgb(2 3 6 / 78%), rgb(2 3 6 / 0%));
+  justify-items: start;
+  padding-left: var(--space-3);
+}
+
+.chevronRight {
+  right: 0;
+  background: linear-gradient(270deg, rgb(2 3 6 / 78%), rgb(2 3 6 / 0%));
+  justify-items: end;
+  padding-right: var(--space-3);
+}
+
+/* Reveal a chevron only when there is room to scroll that way, and the row is hovered. */
+.viewport:hover .chevron[data-visible="true"] {
+  opacity: 1;
+}
+
+.chevron[data-visible="false"] {
+  pointer-events: none;
+}
+
+.chevron:hover {
+  color: var(--color-accent-hover);
+}
+
 @media (min-width: 768px) {
   .track {
     grid-auto-columns: 176px;
     gap: var(--space-5);
+  }
+}
+
+@media (hover: none) {
+  /* No hover on touch — rely on native swipe scrolling; keep the chevrons out of the way. */
+  .chevron {
+    display: none;
   }
 }
