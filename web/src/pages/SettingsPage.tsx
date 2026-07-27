@@ -3,6 +3,8 @@ import { useAccounts, useConnectAccount, useDiagnostics } from "../api/queries";
 import { Button } from "../components/Button";
 import { ErrorState } from "../components/ErrorState";
 import { LoadingState } from "../components/LoadingState";
+import { ThemeToggle } from "../components/ThemeToggle";
+import { Icons } from "../components/icons";
 import { titleize } from "../lib/format";
 import styles from "./SettingsPage.module.css";
 
@@ -27,11 +29,41 @@ export function SettingsPage() {
     }
   }
 
+  /*
+   * Appearance is a purely local preference, so it renders above the diagnostics fetch and stays
+   * usable even when the server is unreachable — the one setting that must never depend on I/O.
+   */
+  const appearance = (
+    <div className={styles.card}>
+      <h2 className={styles.cardTitle}>Appearance</h2>
+      <p className={styles.cardHint}>
+        System follows your operating system and updates when it changes.
+      </p>
+      <ThemeToggle />
+    </div>
+  );
+
   if (isLoading) {
-    return <LoadingState label="Loading diagnostics…" />;
+    return (
+      <section aria-label="Settings">
+        <div className={styles.header}>
+          <h1>Settings</h1>
+        </div>
+        <div className={styles.grid}>{appearance}</div>
+        <LoadingState label="Loading diagnostics…" />
+      </section>
+    );
   }
   if (isError || !data) {
-    return <ErrorState title="Could not load diagnostics" description="Try again in a moment." />;
+    return (
+      <section aria-label="Settings">
+        <div className={styles.header}>
+          <h1>Settings</h1>
+        </div>
+        <div className={styles.grid}>{appearance}</div>
+        <ErrorState title="Could not load diagnostics" description="Try again in a moment." />
+      </section>
+    );
   }
 
   const capabilities = Object.entries(data.capabilities);
@@ -39,7 +71,9 @@ export function SettingsPage() {
     <section aria-label="Settings">
       <div className={styles.header}>
         <h1>Settings</h1>
-        <Button onClick={copyBundle}>Copy support bundle</Button>
+        <Button icon={Icons.confirm} onClick={copyBundle}>
+          Copy support bundle
+        </Button>
       </div>
       {copied ? (
         <p className={styles.copied} role="status">
@@ -48,6 +82,8 @@ export function SettingsPage() {
       ) : null}
 
       <div className={styles.grid}>
+        {appearance}
+
         <div className={styles.card}>
           <h2 className={styles.cardTitle}>App</h2>
           <dl className={styles.rows}>

@@ -1,0 +1,83 @@
+.group {
+  position: relative;
+  display: inline-grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--space-1);
+  margin: 0;
+  padding: var(--space-1);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-pill);
+  background: var(--color-surface-sunken);
+  /* Isolates the sliding indicator's stacking context from the page. */
+  isolation: isolate;
+}
+
+/*
+ * The selected pill is one element that slides, rather than a background toggled on each option.
+ * translateX by index is a compositor-only animation, so it stays smooth on a loaded page.
+ */
+.indicator {
+  position: absolute;
+  z-index: -1;
+  top: var(--space-1);
+  bottom: var(--space-1);
+  left: var(--space-1);
+  width: calc((100% - var(--space-2)) / 3);
+  border-radius: var(--radius-pill);
+  background: var(--color-surface-raised);
+  border: 1px solid var(--color-border);
+  box-shadow: var(--elevation-1);
+  transform: translateX(calc(var(--index) * 100%));
+  transition: transform var(--duration-base) var(--ease-emphasized);
+}
+
+.option {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  min-height: 36px;
+  padding: 0 var(--space-4);
+  border-radius: var(--radius-pill);
+  color: var(--color-text-muted);
+  font: var(--text-caption);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: color var(--duration-fast) var(--ease-standard);
+}
+
+.option:hover {
+  color: var(--color-text-secondary);
+}
+
+/* :has lets the label style itself from its own radio's state, with no extra class plumbing. */
+.option:has(.input:checked) {
+  color: var(--color-text);
+}
+
+.compact .option {
+  /* Icon-only: still a full 44px pointer target even though the pill reads smaller. */
+  min-width: var(--hit-target);
+  padding: 0;
+}
+
+.input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.option:has(.input:focus-visible) {
+  outline: var(--ring-width) solid var(--color-focus);
+  outline-offset: 2px;
+}
+
+.label {
+  display: block;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .indicator {
+    transition: none;
+  }
+}
