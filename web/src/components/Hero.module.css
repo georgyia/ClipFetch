@@ -2,13 +2,15 @@
   position: relative;
   display: flex;
   align-items: flex-end;
-  min-height: 320px;
+  /* Fluid height: fills a phone screen without swallowing a desktop one. */
+  min-height: clamp(320px, 46vh, 520px);
   padding: var(--space-9) var(--space-8);
   margin-bottom: var(--space-9);
-  border-radius: var(--radius-panel);
+  border-radius: var(--radius-xl);
   overflow: hidden;
   background: var(--gradient-accent);
   color: var(--color-text);
+  box-shadow: var(--elevation-4);
   isolation: isolate;
 }
 
@@ -28,13 +30,14 @@
 
 .preview {
   z-index: -1;
-  animation: hero-fade 900ms ease-out;
+  animation: hero-fade var(--duration-slower) var(--ease-standard);
 }
 
 @keyframes hero-fade {
   from {
     opacity: 0;
   }
+
   to {
     opacity: 1;
   }
@@ -50,6 +53,10 @@
   mix-blend-mode: soft-light;
 }
 
+/*
+ * Two-axis scrim. The vertical pass guarantees AA contrast for the title over any poster; the
+ * horizontal pass keeps the left column readable while the right side of the media stays visible.
+ */
 .scrim {
   position: absolute;
   inset: 0;
@@ -67,17 +74,31 @@
 }
 
 .eyebrow {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
   margin: 0;
-  font: var(--text-label);
-  letter-spacing: 0.08em;
+  font: var(--text-caption);
+  letter-spacing: 0.14em;
   text-transform: uppercase;
   color: var(--color-text-secondary);
 }
 
+/* A short gradient rule that ties the eyebrow back to the brand accent. */
+.eyebrow::before {
+  content: "";
+  width: 28px;
+  height: 2px;
+  border-radius: var(--radius-pill);
+  background: var(--gradient-accent);
+}
+
 .title {
   margin: 0;
-  font: 700 30px / 34px var(--font-sans);
-  text-shadow: 0 2px 18px rgb(0 0 0 / 55%);
+  font: var(--text-display);
+  letter-spacing: var(--tracking-display);
+  text-wrap: balance;
+  text-shadow: 0 2px 24px rgb(0 0 0 / 60%);
 }
 
 .sub {
@@ -87,55 +108,65 @@
 
 .actions {
   display: flex;
-  gap: var(--space-3);
-  margin-top: var(--space-4);
+  flex-wrap: wrap;
+  gap: var(--space-4);
+  margin-top: var(--space-5);
 }
 
 .play,
 .info {
   display: inline-flex;
   align-items: center;
-  gap: var(--space-2);
-  min-height: 44px;
-  padding: 0 var(--space-6);
+  gap: var(--space-3);
+  min-height: 52px;
+  padding: 0 var(--space-8);
   border-radius: var(--radius-control);
-  font: 650 15px / 1 var(--font-sans);
+  font: var(--text-subheading);
   text-decoration: none;
-  transition: transform 160ms ease-out, background-color 160ms ease-out;
+  transition: transform var(--duration-fast) var(--ease-standard), background-color
+    var(--duration-fast) var(--ease-standard), box-shadow var(--duration-base) var(--ease-standard);
 }
 
+/*
+ * The hero Play is deliberately inverted — solid white on media — rather than the coral primary.
+ * Over a photographic backdrop, maximum luminance contrast beats hue contrast every time.
+ */
 .play {
   background: var(--color-text);
   color: var(--color-text-inverse);
+  box-shadow: var(--elevation-3);
+}
+
+.playIcon {
+  fill: currentcolor;
 }
 
 .info {
-  background: rgb(255 255 255 / 14%);
+  background: var(--surface-glass);
+  border: 1px solid var(--glass-border-strong);
   color: var(--color-text);
-  backdrop-filter: blur(6px);
+  backdrop-filter: var(--glass-blur);
 }
 
 .play:hover,
 .info:hover {
-  transform: translateY(-1px);
+  transform: translateY(calc(-2px * var(--motion-scale)));
 }
 
 .play:hover {
   background: #fff;
+  box-shadow: var(--elevation-4);
 }
 
 .info:hover {
-  background: rgb(255 255 255 / 22%);
+  background: var(--color-surface-hover);
+  border-color: var(--color-border-strong);
 }
 
-@media (min-width: 768px) {
-  .hero {
-    min-height: 420px;
-  }
-
-  .title {
-    font: 700 44px / 48px var(--font-sans);
-  }
+.play:focus-visible,
+.info:focus-visible {
+  outline: none;
+  box-shadow: var(--ring);
 }
 
 @media (prefers-reduced-motion: reduce) {

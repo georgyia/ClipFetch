@@ -8,6 +8,7 @@ import { FavoriteButton } from "../components/FavoriteButton";
 import { LoadingState } from "../components/LoadingState";
 import { QualityBadge } from "../components/QualityBadge";
 import { TopicChip } from "../components/TopicChip";
+import { Icons } from "../components/icons";
 import { compactCount, formatBytes, formatDate, formatDuration } from "../lib/format";
 import styles from "./ClipDetailPage.module.css";
 
@@ -80,7 +81,9 @@ export function ClipDetailPage() {
           <div className={styles.actions}>
             {clip.available ? (
               <Link to={`/watch/${encodeURIComponent(clip.id)}`}>
-                <Button variant="primary">▶ Watch</Button>
+                <Button variant="primary" icon={Icons.play}>
+                  Watch
+                </Button>
               </Link>
             ) : (
               <Button variant="primary" disabled>

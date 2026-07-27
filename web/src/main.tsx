@@ -3,6 +3,8 @@ import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { BrowserRouter } from "react-router-dom";
 import { App } from "./app/App";
+// Fonts first: the @font-face rules must land before tokens.css references the family.
+import "./styles/fonts.css";
 import "./styles/tokens.css";
 
 const queryClient = new QueryClient({

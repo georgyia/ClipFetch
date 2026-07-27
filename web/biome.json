@@ -11,5 +11,6 @@
       "a11y": { "useSemanticElements": "off" }
     }
   },
-  "javascript": { "formatter": { "quoteStyle": "double" } }
+  "javascript": { "formatter": { "quoteStyle": "double" } },
+  "css": { "parser": { "cssModules": true } }
 }

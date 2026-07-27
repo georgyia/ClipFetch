@@ -1,18 +1,44 @@
 /*
- * ClipFetch Watch design tokens and base styles.
- * A cinematic, editorial dark theme built from vertical media and crisp metadata — an original
- * coral-to-violet identity, not a Netflix copy. A light theme can be layered on later.
+ * ClipFetch Watch — design system 2.0
+ * ==================================
+ *
+ * A cinematic, editorial dark theme built from vertical media and crisp metadata: an original
+ * coral→violet identity, not a Netflix copy.
+ *
+ * The system has six layers. Downstream CSS should reference these and nothing else — no
+ * hard-coded shadows, durations, or type sizes anywhere in a module.
+ *
+ *   1. Palette      raw hues, split into surfaces / text / accent / status
+ *   2. Elevation    --elevation-1..5, a ramp of layered, ink-tinted shadows
+ *   3. Glass        translucent chrome (--surface-glass) with a solid no-blur fallback
+ *   4. Typography   fluid clamp() scale, tightening tracking as sizes grow
+ *   5. Motion       --duration-* and --ease-*, all degrading under prefers-reduced-motion
+ *   6. Shape        radii, spacing, focus ring, hit targets
+ *
+ * Elevation guide — which surface uses which level:
+ *   0  page background, flush sections
+ *   1  chips, badges, inline controls, list rows
+ *   2  cards at rest, panels, the nav rail
+ *   3  cards on hover, popovers, the condensed header
+ *   4  dialogs, sheets, the command palette
+ *   5  the player control bar and anything floating over full-bleed media
  */
 
 :root {
-  /* Surfaces */
+  color-scheme: dark;
+
+  /* ---------------------------------------------------------------- 1. Palette */
+
+  /* Surfaces — a cool, near-black ink ramp. Each step is a real, perceptible lift. */
   --color-bg: #07080b;
   --color-bg-subtle: #0b0d12;
   --color-surface: #11141a;
   --color-surface-raised: #181c24;
   --color-surface-hover: #202632;
+  --color-surface-sunken: #040507;
   --color-border: #2a303c;
   --color-border-subtle: #1d222c;
+  --color-border-strong: #3a4252;
 
   /* Text */
   --color-text: #f7f8fa;
@@ -25,15 +51,117 @@
   --color-accent-hover: #ff6b80;
   --color-accent-pressed: #e83d57;
   --color-accent-violet: #8b5cf6;
+  --color-accent-violet-hover: #a78bfa;
   --color-success: #2dd4bf;
   --color-warning: #fbbf24;
   --color-danger: #f43f5e;
   --color-info: #60a5fa;
   --color-focus: #7dd3fc;
 
-  --overlay-scrim: rgb(2 3 6 / 72%);
+  /* Tinted accent washes, for selected chips, active rows, and hover fills. */
+  --color-accent-wash: rgb(255 77 103 / 14%);
+  --color-accent-wash-strong: rgb(255 77 103 / 24%);
+  --color-violet-wash: rgb(139 92 246 / 16%);
 
-  /* Spacing scale */
+  --overlay-scrim: rgb(2 3 6 / 72%);
+  --overlay-scrim-soft: rgb(2 3 6 / 45%);
+
+  /* ------------------------------------------------------------- 2. Elevation */
+
+  /*
+   * Shadows are tinted with the page ink rather than pure black so they read as depth instead of
+   * soot, and each level layers a tight contact shadow under a wider ambient one. Levels 3+ add a
+   * hairline top highlight (inset) so raised surfaces catch light along their upper edge.
+   */
+  --shadow-ink: 222 45% 2%;
+
+  --elevation-1: 0 1px 2px -1px hsl(var(--shadow-ink) / 50%), 0 2px 6px -2px
+    hsl(var(--shadow-ink) / 32%);
+  --elevation-2: 0 2px 4px -2px hsl(var(--shadow-ink) / 55%), 0 6px 16px -4px
+    hsl(var(--shadow-ink) / 40%);
+  --elevation-3: 0 4px 8px -3px hsl(var(--shadow-ink) / 60%), 0 14px 32px -8px
+    hsl(var(--shadow-ink) / 48%), inset 0 1px 0 0 rgb(255 255 255 / 5%);
+  --elevation-4: 0 8px 16px -6px hsl(var(--shadow-ink) / 65%), 0 28px 60px -14px
+    hsl(var(--shadow-ink) / 58%), inset 0 1px 0 0 rgb(255 255 255 / 6%);
+  --elevation-5: 0 12px 24px -8px hsl(var(--shadow-ink) / 72%), 0 44px 88px -20px
+    hsl(var(--shadow-ink) / 66%), inset 0 1px 0 0 rgb(255 255 255 / 8%);
+
+  /* Cards lifting on hover pick up a faint accent bloom alongside the ambient shadow. */
+  --shadow-card-hover: var(--elevation-3), 0 0 0 1px rgb(255 255 255 / 7%), 0 24px 56px -20px
+    rgb(255 77 103 / 24%);
+  --accent-glow: 0 0 32px -8px rgb(255 77 103 / 45%);
+  --accent-glow-strong: 0 0 48px -6px rgb(255 77 103 / 60%);
+
+  /* Retained alias: earlier modules reference --shadow-raised directly. */
+  --shadow-raised: var(--elevation-2);
+
+  /* ----------------------------------------------------------------- 3. Glass */
+
+  /*
+   * Translucent chrome for the header, sheets, and control bars. --surface-glass is defined here
+   * as a fallback-safe solid; the @supports block below swaps in the transparent value only where
+   * backdrop-filter actually works, so no browser renders unreadable text over media.
+   */
+  --surface-glass: rgb(17 20 26 / 96%);
+  --surface-glass-strong: rgb(11 13 18 / 98%);
+  --glass-blur: none;
+  --glass-border: rgb(255 255 255 / 8%);
+  --glass-border-strong: rgb(255 255 255 / 12%);
+
+  /* ------------------------------------------------------------ 4. Typography */
+
+  --font-sans: "Inter Variable", Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont,
+    "Segoe UI", sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace;
+
+  /*
+   * Fluid scale, tuned between a 360px phone and a 1440px desktop. Body and label stay fixed —
+   * only display-through-subheading scale, so reading measure never drifts.
+   */
+  --size-display: clamp(2rem, 1.25rem + 3.35vw, 3.5rem); /* 32 → 56 */
+  --size-title: clamp(1.5rem, 1.15rem + 1.56vw, 2.25rem); /* 24 → 36 */
+  --size-heading: clamp(1.125rem, 1rem + 0.56vw, 1.5rem); /* 18 → 24 */
+  --size-subheading: clamp(1rem, 0.96rem + 0.19vw, 1.125rem); /* 16 → 18 */
+  --size-body: 1rem;
+  --size-label: 0.8125rem;
+  --size-caption: 0.75rem;
+
+  /* Shorthand `font:` values, so a module can write `font: var(--text-heading)`. */
+  --text-display: 700 var(--size-display) / 1.05 var(--font-sans);
+  --text-title: 680 var(--size-title) / 1.15 var(--font-sans);
+  --text-heading: 650 var(--size-heading) / 1.25 var(--font-sans);
+  --text-subheading: 600 var(--size-subheading) / 1.4 var(--font-sans);
+  --text-body: 400 var(--size-body) / 1.5 var(--font-sans);
+  --text-body-strong: 550 var(--size-body) / 1.5 var(--font-sans);
+  --text-label: 600 var(--size-label) / 1.25 var(--font-sans);
+  --text-caption: 500 var(--size-caption) / 1.35 var(--font-sans);
+
+  /* Inter opens up as it grows, so large sizes pull their tracking back in. */
+  --tracking-display: -0.03em;
+  --tracking-title: -0.02em;
+  --tracking-heading: -0.01em;
+  --tracking-wide: 0.04em;
+
+  /* ---------------------------------------------------------------- 5. Motion */
+
+  --duration-instant: 80ms;
+  --duration-fast: 140ms;
+  --duration-base: 220ms;
+  --duration-slow: 340ms;
+  --duration-slower: 560ms;
+
+  /* Standard: most state changes. Emphasized: entrances that should feel decisive. */
+  --ease-standard: cubic-bezier(0.2, 0, 0, 1);
+  --ease-emphasized: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-exit: cubic-bezier(0.4, 0, 1, 1);
+  /* A restrained overshoot — enough to feel physical, not enough to feel bouncy. */
+  --ease-spring: cubic-bezier(0.34, 1.36, 0.64, 1);
+
+  /* 1 normally, 0 under reduced motion, so CSS can scale a transform off one signal. */
+  --motion-scale: 1;
+
+  /* ----------------------------------------------------------------- 6. Shape */
+
   --space-1: 2px;
   --space-2: 4px;
   --space-3: 8px;
@@ -47,29 +175,54 @@
   --space-11: 64px;
   --space-12: 80px;
 
-  /* Radii */
   --radius-small: 6px;
   --radius-control: 10px;
   --radius-card: 12px;
   --radius-panel: 16px;
+  --radius-xl: 20px;
+  --radius-2xl: 28px;
   --radius-pill: 999px;
 
-  /* Typography */
-  --font-sans: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
-    sans-serif;
-  --text-body: 400 16px / 24px var(--font-sans);
-  --text-label: 600 13px / 16px var(--font-sans);
-  --shadow-raised: 0 6px 24px rgb(0 0 0 / 40%);
-  --shadow-card-hover: 0 18px 40px -12px rgb(0 0 0 / 65%), 0 0 0 1px rgb(255 255 255 / 6%);
+  /* Focus ring, shared by :focus-visible and any component drawing its own ring. */
+  --ring: 0 0 0 2px var(--color-bg), 0 0 0 4px var(--color-focus);
+  --ring-width: 2px;
 
-  /* Signature coral→violet gradient, used for the hero wash and accent flourishes. */
+  /* Minimum comfortable hit area — every interactive control honours this. */
+  --hit-target: 44px;
+
+  /* --------------------------------------------------------------- Gradients */
+
+  /* Signature coral→violet, used for the hero wash, active indicators, and accent flourishes. */
   --gradient-accent: linear-gradient(
     120deg,
     var(--color-accent-pressed),
     var(--color-accent-violet)
   );
+  --gradient-accent-soft: linear-gradient(120deg, rgb(232 61 87 / 22%), rgb(139 92 246 / 22%));
   --gradient-fade-right: linear-gradient(90deg, rgb(7 8 11 / 0%), var(--color-bg));
   --gradient-fade-left: linear-gradient(270deg, rgb(7 8 11 / 0%), var(--color-bg));
+
+  /*
+   * Ambient page wash: two very wide, very dilute accent pools behind the content so cards sit on
+   * something with depth instead of flat black. Kept under 10% alpha to protect text contrast.
+   */
+  --gradient-ambient: radial-gradient(
+      70rem 40rem at 12% -10%,
+      rgb(255 77 103 / 9%),
+      transparent 60%
+    ), radial-gradient(60rem 36rem at 88% 4%, rgb(139 92 246 / 8%), transparent 62%);
+}
+
+/*
+ * Progressive enhancement: only browsers that can actually blur get the transparent chrome.
+ * Everywhere else --surface-glass stays the opaque value defined above.
+ */
+@supports ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  :root {
+    --surface-glass: rgb(13 16 21 / 68%);
+    --surface-glass-strong: rgb(8 10 14 / 82%);
+    --glass-blur: saturate(160%) blur(20px);
+  }
 }
 
 *,
@@ -78,16 +231,40 @@
   box-sizing: border-box;
 }
 
+html {
+  /* Scroll-driven UI (rails, in-page anchors) should ease rather than jump. */
+  scroll-behavior: smooth;
+}
+
 body {
   margin: 0;
   font: var(--text-body);
   color: var(--color-text);
   background-color: var(--color-bg);
+  background-image: var(--gradient-ambient);
+  background-attachment: fixed;
+  background-repeat: no-repeat;
   -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+/* Headings inherit the fluid scale plus its matching tracking by default. */
+h1 {
+  font: var(--text-title);
+  letter-spacing: var(--tracking-title);
+}
+
+h2 {
+  font: var(--text-heading);
+  letter-spacing: var(--tracking-heading);
+}
+
+h3 {
+  font: var(--text-subheading);
 }
 
 :focus-visible {
-  outline: 2px solid var(--color-focus);
+  outline: var(--ring-width) solid var(--color-focus);
   outline-offset: 2px;
   border-radius: var(--radius-small);
 }
@@ -115,7 +292,8 @@ body {
   background: var(--color-surface-raised);
   color: var(--color-text);
   border-radius: var(--radius-control);
-  transition: top 120ms ease-out;
+  box-shadow: var(--elevation-4);
+  transition: top var(--duration-fast) var(--ease-standard);
 }
 
 .skip-link:focus {
@@ -123,11 +301,25 @@ body {
 }
 
 @media (prefers-reduced-motion: reduce) {
+  :root {
+    --motion-scale: 0;
+    --duration-instant: 0.001ms;
+    --duration-fast: 0.001ms;
+    --duration-base: 0.001ms;
+    --duration-slow: 0.001ms;
+    --duration-slower: 0.001ms;
+  }
+
+  html {
+    scroll-behavior: auto;
+  }
+
   *,
   *::before,
   *::after {
     animation-duration: 0.001ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
   }
 }

@@ -21,7 +21,7 @@ function renderRail() {
 test("renders a titled rail with a see-all link", () => {
   renderRail();
   expect(screen.getByRole("region", { name: "Recently Added" })).toBeInTheDocument();
-  expect(screen.getByRole("link", { name: "See all →" })).toHaveAttribute("href", "/library");
+  expect(screen.getByRole("link", { name: "See all" })).toHaveAttribute("href", "/library");
 });
 
 test("arrow keys move focus between cards", () => {

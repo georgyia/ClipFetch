@@ -3,6 +3,8 @@ import { type ClipSummary, mediaUrl, posterUrl } from "../api/types";
 import { compactCount, formatDuration } from "../lib/format";
 import { useHoverPreview } from "../lib/useHoverPreview";
 import styles from "./ClipCard.module.css";
+import { Icon } from "./Icon";
+import { Icons } from "./icons";
 
 export interface ClipCardProps {
   clip: ClipSummary;
@@ -10,16 +12,27 @@ export interface ClipCardProps {
   progress?: number;
 }
 
-function subtitle(clip: ClipSummary): string {
-  const parts: string[] = [];
-  if (clip.author) {
-    parts.push(clip.author);
-  }
+/**
+ * Author and like count. The heart is an icon rather than a `♥` in the string so it renders the
+ * same on every platform, and it stays out of the accessible name — the link is already labelled
+ * with the caption.
+ */
+function Subtitle({ clip }: { clip: ClipSummary }) {
   const likes = compactCount(clip.likes);
-  if (likes) {
-    parts.push(`♥ ${likes}`);
+  if (!clip.author && !likes) {
+    return null;
   }
-  return parts.join(" · ");
+  return (
+    <p className={styles.sub}>
+      {clip.author ? <span className={styles.author}>{clip.author}</span> : null}
+      {likes ? (
+        <span className={styles.stat}>
+          <Icon icon={Icons.favorite} size="xs" />
+          {likes}
+        </span>
+      ) : null}
+    </p>
+  );
 }
 
 /**
@@ -70,8 +83,8 @@ export function ClipCard({ clip, progress }: ClipCardProps) {
           />
         ) : null}
         <div className={styles.hoverScrim} aria-hidden="true" />
-        <span className={styles.playBadge} aria-hidden="true">
-          ▶
+        <span className={styles.playBadge}>
+          <Icon icon={Icons.play} size="lg" className={styles.playGlyph} />
         </span>
         {clip.available ? null : <span className={styles.unavailableTag}>Media unavailable</span>}
         {duration ? <span className={styles.duration}>{duration}</span> : null}
@@ -83,7 +96,7 @@ export function ClipCard({ clip, progress }: ClipCardProps) {
       </div>
       <div className={styles.meta}>
         <p className={styles.caption}>{label}</p>
-        <p className={styles.sub}>{subtitle(clip)}</p>
+        <Subtitle clip={clip} />
       </div>
     </Link>
   );

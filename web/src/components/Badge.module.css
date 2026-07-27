@@ -1,21 +1,71 @@
+/*
+ * Badges: static labels. Every tone is a translucent wash of its hue over the page ink plus a
+ * matching hairline, so badges read as tinted glass rather than as solid stickers, and they stay
+ * legible on cards, over media, and on the flat page alike.
+ */
+
 .badge {
   display: inline-flex;
   align-items: center;
   gap: var(--space-2);
-  padding: var(--space-1) var(--space-3);
+  padding: var(--space-2) var(--space-4);
+  border: 1px solid transparent;
   border-radius: var(--radius-pill);
-  font: var(--text-label);
+  font: var(--text-caption);
+  letter-spacing: var(--tracking-wide);
   white-space: nowrap;
 }
 
-.quality {
-  background: var(--color-surface-raised);
+.neutral {
+  background: color-mix(in srgb, var(--color-surface-raised) 80%, transparent);
+  border-color: var(--color-border);
   color: var(--color-text-secondary);
-  border: 1px solid var(--color-border);
+}
+
+.accent {
+  background: var(--color-accent-wash);
+  border-color: color-mix(in srgb, var(--color-accent) 40%, transparent);
+  color: var(--color-accent-hover);
+}
+
+.violet {
+  background: var(--color-violet-wash);
+  border-color: color-mix(in srgb, var(--color-accent-violet) 40%, transparent);
+  color: var(--color-accent-violet-hover);
+}
+
+.success {
+  background: color-mix(in srgb, var(--color-success) 14%, transparent);
+  border-color: color-mix(in srgb, var(--color-success) 38%, transparent);
+  color: var(--color-success);
+}
+
+.warning {
+  background: color-mix(in srgb, var(--color-warning) 14%, transparent);
+  border-color: color-mix(in srgb, var(--color-warning) 38%, transparent);
+  color: var(--color-warning);
+}
+
+.danger {
+  background: color-mix(in srgb, var(--color-danger) 16%, transparent);
+  border-color: color-mix(in srgb, var(--color-danger) 42%, transparent);
+  color: #ffb3c0;
+}
+
+.info {
+  background: color-mix(in srgb, var(--color-info) 14%, transparent);
+  border-color: color-mix(in srgb, var(--color-info) 38%, transparent);
+  color: var(--color-info);
+}
+
+/*
+ * Legacy class names, kept so modules that still write `${styles.badge} ${styles.quality}`
+ * keep rendering while call sites migrate to the <Badge> component.
+ */
+.quality {
+  composes: neutral;
 }
 
 .chip {
-  background: color-mix(in srgb, var(--color-accent-violet) 22%, transparent);
-  color: var(--color-text);
-  border: 1px solid transparent;
+  composes: violet;
 }

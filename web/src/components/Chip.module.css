@@ -1,0 +1,124 @@
+/*
+ * Chips: the interactive counterpart to Badge. Same pill radius and optical height, so a filter
+ * bar can mix the two without the row looking ragged.
+ */
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  /* Comfortable but not button-sized — chips appear in dense rows. */
+  min-height: 34px;
+  padding: 0 var(--space-4);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-pill);
+  background: color-mix(in srgb, var(--color-surface-raised) 70%, transparent);
+  color: var(--color-text-secondary);
+  font: var(--text-label);
+  text-decoration: none;
+  white-space: nowrap;
+  -webkit-tap-highlight-color: transparent;
+  transition: background-color var(--duration-fast) var(--ease-standard), border-color
+    var(--duration-fast) var(--ease-standard), color var(--duration-fast) var(--ease-standard),
+    transform var(--duration-instant) var(--ease-standard);
+}
+
+.interactive {
+  cursor: pointer;
+  /*
+   * Chips are shorter than the 44px minimum so filter rows stay dense; the pseudo-element below
+   * extends the *pointer* target back to 44px without changing the visual size.
+   */
+  position: relative;
+}
+
+.interactive::after {
+  content: "";
+  position: absolute;
+  inset: calc((34px - var(--hit-target)) / 2) 0;
+}
+
+.interactive:hover {
+  background: var(--color-surface-hover);
+  border-color: var(--color-border-strong);
+  color: var(--color-text);
+}
+
+.interactive:active {
+  transform: scale(calc(1 - 0.03 * var(--motion-scale)));
+}
+
+.chip:focus-visible {
+  outline: none;
+  box-shadow: var(--ring);
+}
+
+.selected {
+  background: var(--color-accent-wash-strong);
+  border-color: color-mix(in srgb, var(--color-accent) 55%, transparent);
+  color: var(--color-text);
+}
+
+.selected:hover {
+  background: color-mix(in srgb, var(--color-accent) 32%, transparent);
+  border-color: var(--color-accent);
+}
+
+.chip:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.label {
+  display: block;
+}
+
+.count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 20px;
+  padding: 0 var(--space-2);
+  border-radius: var(--radius-pill);
+  background: color-mix(in srgb, var(--color-bg) 55%, transparent);
+  color: var(--color-text-muted);
+  font: var(--text-caption);
+  font-variant-numeric: tabular-nums;
+}
+
+.selected .count {
+  color: var(--color-text-secondary);
+}
+
+/* ------------------------------------------------------------ dismissible */
+
+.removable {
+  padding-right: var(--space-1);
+}
+
+.remove {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-pill);
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  opacity: 0.7;
+  transition: background-color var(--duration-fast) var(--ease-standard), opacity
+    var(--duration-fast) var(--ease-standard);
+}
+
+.remove:hover {
+  background: color-mix(in srgb, var(--color-danger) 24%, transparent);
+  opacity: 1;
+}
+
+.remove:focus-visible {
+  outline: none;
+  box-shadow: var(--ring);
+}

@@ -3,6 +3,8 @@ import { Link } from "react-router-dom";
 import type { ClipSummary } from "../api/types";
 import { ClipCard } from "./ClipCard";
 import styles from "./ClipRail.module.css";
+import { Icon } from "./Icon";
+import { Icons } from "./icons";
 
 export interface ClipRailProps {
   title: string;
@@ -79,7 +81,8 @@ export function ClipRail({ title, items, seeAllTo, progressById }: ClipRailProps
         <h2 className={styles.title}>{title}</h2>
         {seeAllTo ? (
           <Link className={styles.seeAll} to={seeAllTo}>
-            See all →
+            See all
+            <Icon icon={Icons.arrowRight} size="sm" />
           </Link>
         ) : null}
       </div>
@@ -92,7 +95,7 @@ export function ClipRail({ title, items, seeAllTo, progressById }: ClipRailProps
           tabIndex={-1}
           onClick={() => page(-1)}
         >
-          ‹
+          <Icon icon={Icons.chevronLeft} size="lg" />
         </button>
         <div
           className={styles.track}
@@ -115,7 +118,7 @@ export function ClipRail({ title, items, seeAllTo, progressById }: ClipRailProps
           tabIndex={-1}
           onClick={() => page(1)}
         >
-          ›
+          <Icon icon={Icons.chevronRight} size="lg" />
         </button>
       </div>
     </section>
