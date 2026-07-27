@@ -7,6 +7,7 @@ import { closeCommandPalette, openShortcutsHelp, useCommandPaletteOpen } from ".
 import { loadRecentSearches } from "../lib/recentSearches";
 import { setThemeChoice } from "../lib/theme";
 import { useDebouncedValue } from "../lib/useDebouncedValue";
+import { useFocusTrap } from "../lib/useFocusTrap";
 import styles from "./CommandPalette.module.css";
 import { Icon } from "./Icon";
 import { Icons, type LucideIcon } from "./icons";
@@ -34,6 +35,7 @@ export function CommandPalette() {
   const [query, setQuery] = useState("");
   const [activeIndex, setActiveIndex] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
   const listboxId = useId();
   const optionId = useId();
@@ -233,6 +235,18 @@ export function CommandPalette() {
     setActiveIndex((index) => Math.min(index, Math.max(0, visible.length - 1)));
   }, [visible.length]);
 
+  /*
+   * Tab containment and focus restoration, shared with Dialog.
+   *
+   * Registered *before* the effect that focuses the input: the trap records whatever had focus
+   * when the palette opened so it can hand it back on close, and effects run in declaration order
+   * — the other way round it would capture the palette's own input and restore focus to nothing.
+   *
+   * skipInitialFocus because the palette wants the caret in its search box, not on the first
+   * focusable element the trap would otherwise pick.
+   */
+  useFocusTrap(panelRef, open, { onClose: closeCommandPalette, skipInitialFocus: true });
+
   useEffect(() => {
     if (!open) {
       return;
@@ -295,7 +309,13 @@ export function CommandPalette() {
         aria-label="Close command palette"
         onClick={closeCommandPalette}
       />
-      <div className={styles.panel} role="dialog" aria-modal="true" aria-label="Command palette">
+      <div
+        ref={panelRef}
+        className={styles.panel}
+        role="dialog"
+        aria-modal="true"
+        aria-label="Command palette"
+      >
         <div className={styles.inputRow}>
           <Icon icon={Icons.search} size="lg" className={styles.inputIcon} />
           <input

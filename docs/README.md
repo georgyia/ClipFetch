@@ -7,6 +7,8 @@ Deep-dive documentation for ClipFetch and the ClipFetch Watch streaming interfac
 
 - **[watch-user-guide.md](watch-user-guide.md)** — install, first run, playback and keyboard shortcuts,
   downloads, privacy, troubleshooting, and data/migration notes for the Watch preview.
+- **[accessibility.md](accessibility.md)** — what the interface commits to, how each commitment is verified
+  in the test suite, and the gaps that are deliberately not claimed.
 - **[release-checklist.md](release-checklist.md)** — repeatable steps for cutting a release, including the
   packaged clean-install smoke.
 

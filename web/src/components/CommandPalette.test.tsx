@@ -164,3 +164,36 @@ test("'?' opens the shortcuts sheet but is ignored while typing in the palette",
   fireEvent.keyDown(screen.getByRole("combobox"), { key: "?" });
   expect(screen.queryByRole("dialog", { name: "Keyboard shortcuts" })).toBeNull();
 });
+
+test("focus is trapped inside the palette and restored to the opener on close", async () => {
+  render(
+    <QueryClientProvider
+      client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}
+    >
+      <MemoryRouter initialEntries={["/"]}>
+        <button type="button" data-testid="opener">
+          Open
+        </button>
+        <Harness />
+      </MemoryRouter>
+    </QueryClientProvider>,
+  );
+
+  const opener = screen.getByTestId("opener");
+  opener.focus();
+  expect(opener).toHaveFocus();
+
+  openWithShortcut();
+  await screen.findByRole("dialog", { name: "Command palette" });
+  // Focus moved into the palette's input, not left behind on the opener.
+  expect(screen.getByRole("combobox")).toHaveFocus();
+
+  // Tab wraps within the panel rather than escaping to the button behind it.
+  fireEvent.keyDown(document, { key: "Tab" });
+  expect(opener).not.toHaveFocus();
+
+  fireEvent.keyDown(screen.getByRole("combobox"), { key: "Escape" });
+  await waitFor(() => expect(screen.queryByRole("dialog", { name: "Command palette" })).toBeNull());
+  // Closing returns the user to whatever opened it.
+  expect(opener).toHaveFocus();
+});
