@@ -2,12 +2,14 @@ import type { UseInfiniteQueryResult } from "@tanstack/react-query";
 import type { ReactNode } from "react";
 import type { ClipPage } from "../api/types";
 import type { QueueContext } from "../lib/queueSource";
+import { useSelection } from "../lib/useSelection";
 import { Button } from "./Button";
 import { ClipGrid } from "./ClipGrid";
 import styles from "./ClipListView.module.css";
 import { EmptyState } from "./EmptyState";
 import { ErrorState } from "./ErrorState";
 import { PlayAll } from "./PlayAll";
+import { SelectionBar } from "./SelectionBar";
 import { SkeletonGrid } from "./Skeletons";
 import { Icons, type LucideIcon } from "./icons";
 
@@ -33,6 +35,7 @@ export function ClipListView({
   emptyAction,
   queueContext,
 }: ClipListViewProps) {
+  const selection = useSelection();
   const {
     data,
     isLoading,
@@ -77,9 +80,19 @@ export function ClipListView({
         <p className={styles.count} aria-live="polite">
           Showing {items.length} of {total}
         </p>
-        {queueContext ? <PlayAll items={items} context={queueContext} /> : null}
+        <div className={styles.toolbarActions}>
+          {queueContext ? <PlayAll items={items} context={queueContext} /> : null}
+          {/* Entering selection mode swaps the cards' hover affordances for checkboxes. */}
+          {selection.active ? null : (
+            <Button variant="subtle" icon={Icons.confirm} onClick={() => selection.setActive(true)}>
+              Select
+            </Button>
+          )}
+        </div>
       </div>
-      <ClipGrid items={items} label={title} />
+      <ClipGrid items={items} label={title} selection={selection} />
+      <SelectionBar selection={selection} allIds={items.map((item) => item.id)} />
+
       {hasNextPage ? (
         <div className={styles.more}>
           <Button

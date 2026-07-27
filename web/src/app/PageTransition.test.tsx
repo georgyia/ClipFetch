@@ -1,3 +1,4 @@
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { render, screen } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, expect, test, vi } from "vitest";
@@ -73,10 +74,13 @@ test("renders children untouched under reduced motion — no wrapper, no animati
 
 test("the grid reveals immediately under reduced motion instead of waiting to be observed", () => {
   stubReducedMotion(true);
+  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   render(
-    <MemoryRouter>
-      <ClipGrid items={[CLIP]} label="Clips" />
-    </MemoryRouter>,
+    <QueryClientProvider client={queryClient}>
+      <MemoryRouter>
+        <ClipGrid items={[CLIP]} label="Clips" />
+      </MemoryRouter>
+    </QueryClientProvider>,
   );
   // data-revealed drives the entrance animation; true means the cards are visible from the start.
   expect(screen.getByLabelText("Clips")).toHaveAttribute("data-revealed", "true");

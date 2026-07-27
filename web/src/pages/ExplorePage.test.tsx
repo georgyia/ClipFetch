@@ -27,7 +27,9 @@ beforeEach(() => {
     "fetch",
     vi.fn(async (input: RequestInfo | URL) => {
       const url = String(input);
-      if (url.includes("/clips")) {
+      // Only the list endpoint. Cards now fetch /clips/<id>/favorite, which also contains
+      // "/clips" and would otherwise clobber the URL under assertion.
+      if (/\/clips\?/.test(url) || url.endsWith("/clips")) {
         lastClipsUrl = url;
       }
       return new Response(JSON.stringify(pageFor(url)), {

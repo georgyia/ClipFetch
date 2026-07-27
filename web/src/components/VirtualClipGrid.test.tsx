@@ -1,11 +1,21 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { render, screen } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { expect, test } from "vitest";
 import { makeClip } from "../test/fixtures";
 import { ClipGrid } from "./ClipGrid";
 import { GRID_GAP, GRID_MIN_COLUMN, GRID_WIDE_BREAKPOINT, gridGeometry } from "./VirtualClipGrid";
+
+function renderGrid(ui: React.ReactElement) {
+  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  return render(
+    <QueryClientProvider client={queryClient}>
+      <MemoryRouter>{ui}</MemoryRouter>
+    </QueryClientProvider>,
+  );
+}
 
 function manyClips(count: number) {
   return Array.from({ length: count }, (_, index) =>
@@ -51,20 +61,12 @@ test("the JS geometry constants still match ClipGrid.module.css", () => {
 });
 
 test("small result sets render every card in a plain grid", () => {
-  render(
-    <MemoryRouter>
-      <ClipGrid items={manyClips(12)} label="Results" />
-    </MemoryRouter>,
-  );
+  renderGrid(<ClipGrid items={manyClips(12)} label="Results" />);
   expect(screen.getAllByRole("link")).toHaveLength(12);
 });
 
 test("large result sets switch to a windowed grid instead of rendering everything", () => {
-  render(
-    <MemoryRouter>
-      <ClipGrid items={manyClips(500)} label="Results" />
-    </MemoryRouter>,
-  );
+  renderGrid(<ClipGrid items={manyClips(500)} label="Results" />);
   // The list is still one labelled region for assistive tech...
   expect(screen.getByLabelText("Results")).toBeInTheDocument();
   // ...but nowhere near 500 cards exist in the DOM.

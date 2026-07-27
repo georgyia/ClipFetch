@@ -1,14 +1,22 @@
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { expect, test } from "vitest";
 import { makeClip } from "../test/fixtures";
-import { ClipCard } from "./ClipCard";
+import { ClipCard, type ClipCardProps } from "./ClipCard";
 
-function renderCard(clip = makeClip()) {
+/**
+ * The card now carries a real FavoriteButton, which reads the favorite flag through React Query —
+ * so an isolated card needs a client, exactly as it has one inside the app.
+ */
+function renderCard(clip = makeClip(), props: Partial<ClipCardProps> = {}) {
+  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
-    <MemoryRouter>
-      <ClipCard clip={clip} />
-    </MemoryRouter>,
+    <QueryClientProvider client={queryClient}>
+      <MemoryRouter>
+        <ClipCard clip={clip} {...props} />
+      </MemoryRouter>
+    </QueryClientProvider>,
   );
 }
 
@@ -57,4 +65,37 @@ test("never previews unavailable media", async () => {
   // Give the dwell timer time to elapse; the preview must still not appear.
   await new Promise((resolve) => setTimeout(resolve, 700));
   expect(screen.queryByTestId("hover-preview")).not.toBeInTheDocument();
+});
+
+test("offers Favorite directly on the card, without opening the clip", () => {
+  renderCard();
+  expect(screen.getByRole("button", { name: /Favorite/ })).toBeInTheDocument();
+});
+
+test("shows no checkbox until the grid enters selection mode", () => {
+  renderCard();
+  expect(screen.queryByRole("checkbox")).toBeNull();
+});
+
+test("a selectable card exposes a labelled checkbox and reports changes", () => {
+  const changes: boolean[] = [];
+  renderCard(makeClip({ caption: "One-pan pasta" }), {
+    selectable: true,
+    selected: false,
+    onSelectChange: (next) => changes.push(next),
+  });
+
+  const box = screen.getByRole("checkbox", { name: "Select One-pan pasta" });
+  expect(box).not.toBeChecked();
+
+  fireEvent.click(box);
+  expect(changes).toEqual([true]);
+});
+
+test("the clip link and the card controls are separate tab stops", () => {
+  renderCard(makeClip({ caption: "One-pan pasta" }), { selectable: true });
+  // A <button> nested inside an <a> would be invalid and unreachable; both must be real siblings.
+  expect(screen.getByRole("link", { name: "One-pan pasta" })).toBeInTheDocument();
+  expect(screen.getByRole("checkbox")).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: /Favorite/ })).toBeInTheDocument();
 });
