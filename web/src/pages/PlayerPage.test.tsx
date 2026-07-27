@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import { makeClip } from "../test/fixtures";
@@ -93,10 +93,58 @@ test("up-next drawer lists the upcoming queue and jumps to a clip", async () => 
 
   fireEvent.click(screen.getByRole("button", { name: "Up next" }));
   const drawer = screen.getByTestId("up-next");
-  fireEvent.click(within(drawer).getByRole("button"));
+  // The sheet also carries its own close button, so target the queued item by its caption.
+  fireEvent.click(within(drawer).getByRole("button", { name: /One-pan pasta/ }));
 
   await waitFor(() =>
     expect(container.querySelector("video")).toHaveAttribute("src", "/api/v1/clips/IG_COOK2/media"),
+  );
+});
+
+test("the queue sheet can be dismissed from its own close button", async () => {
+  renderPlayer();
+  await waitFor(() => expect(screen.getByRole("button", { name: "Next clip" })).toBeEnabled());
+
+  fireEvent.click(screen.getByRole("button", { name: "Up next" }));
+  expect(screen.getByTestId("up-next")).toBeInTheDocument();
+
+  fireEvent.click(screen.getByRole("button", { name: "Close up next" }));
+  expect(screen.queryByTestId("up-next")).toBeNull();
+});
+
+test("controls stay visible while paused and hide after idle playback", async () => {
+  vi.useFakeTimers();
+  try {
+    renderPlayer();
+    const stage = screen.getByRole("region", { name: "Player" });
+    expect(stage).toHaveAttribute("data-controls", "visible");
+
+    // Playing + idle → the bar gets out of the way.
+    await act(async () => {
+      vi.advanceTimersByTime(4000);
+    });
+    expect(stage).toHaveAttribute("data-controls", "hidden");
+
+    // Any pointer activity brings it straight back.
+    fireEvent.pointerMove(stage);
+    expect(stage).toHaveAttribute("data-controls", "visible");
+
+    // Paused, it must never hide — the viewer is looking at a still and needs the controls.
+    fireEvent.click(screen.getByRole("button", { name: "Pause" }));
+    await act(async () => {
+      vi.advanceTimersByTime(8000);
+    });
+    expect(stage).toHaveAttribute("data-controls", "visible");
+  } finally {
+    vi.useRealTimers();
+  }
+});
+
+test("a full-screen toggle is offered and reports its state", () => {
+  renderPlayer();
+  expect(screen.getByRole("button", { name: "Full screen" })).toHaveAttribute(
+    "aria-pressed",
+    "false",
   );
 });
 
