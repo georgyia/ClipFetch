@@ -249,3 +249,58 @@
     transform: none;
   }
 }
+
+/* ------------------------------------------------------- palette trigger */
+
+/*
+ * A search-box-shaped button. It is not an input on purpose — it opens the palette rather than
+ * accepting text, and a real input here would trap focus for anyone tabbing through the header.
+ */
+.paletteTrigger {
+  display: none;
+  align-items: center;
+  gap: var(--space-3);
+  min-height: 38px;
+  min-width: 240px;
+  padding: 0 var(--space-3) 0 var(--space-4);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-pill);
+  background: color-mix(in srgb, var(--color-surface-raised) 60%, transparent);
+  color: var(--color-text-muted);
+  font: var(--text-label);
+  cursor: pointer;
+  transition: background-color var(--duration-fast) var(--ease-standard), border-color
+    var(--duration-fast) var(--ease-standard), color var(--duration-fast) var(--ease-standard);
+}
+
+.paletteTrigger:hover {
+  background: var(--color-surface-raised);
+  border-color: var(--color-border-strong);
+  color: var(--color-text-secondary);
+}
+
+.paletteTrigger:focus-visible {
+  outline: none;
+  box-shadow: var(--ring);
+}
+
+.paletteLabel {
+  flex: 1;
+  text-align: left;
+}
+
+.paletteKey {
+  padding: var(--space-1) var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-small);
+  background: var(--color-surface);
+  font: var(--text-caption);
+  font-family: var(--font-mono);
+}
+
+/* Below 768px the header has no room for it; the Search tab covers the same ground. */
+@media (min-width: 768px) {
+  .paletteTrigger {
+    display: inline-flex;
+  }
+}

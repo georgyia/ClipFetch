@@ -1,30 +1,50 @@
 import { fireEvent, render, screen } from "@testing-library/react";
-import { afterEach, expect, test } from "vitest";
+import { afterEach, beforeEach, expect, test } from "vitest";
+import { resetOverlays } from "../lib/overlays";
+import { useGlobalShortcuts } from "../lib/useGlobalShortcuts";
 import { ShortcutsHelp } from "./ShortcutsHelp";
 
+/**
+ * The "?" binding lives in useGlobalShortcuts (App mounts it once) rather than inside the dialog,
+ * so the harness mounts both — that is the real wiring.
+ */
+function Harness({ withInput = false }: { withInput?: boolean }) {
+  useGlobalShortcuts();
+  return (
+    <>
+      {withInput ? <input aria-label="query" /> : null}
+      <ShortcutsHelp />
+    </>
+  );
+}
+
+beforeEach(() => {
+  resetOverlays();
+});
+
 afterEach(() => {
-  // Ensure the global keydown listener from one test doesn't leak into the next.
-  fireEvent.keyDown(window, { key: "Escape" });
+  resetOverlays();
 });
 
 test("opens the shortcuts dialog on ? and lists player keys", () => {
-  render(<ShortcutsHelp />);
+  render(<Harness />);
   expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
 
   fireEvent.keyDown(window, { key: "?" });
-  const dialog = screen.getByRole("dialog", { name: "Keyboard shortcuts" });
-  expect(dialog).toBeInTheDocument();
+  expect(screen.getByRole("dialog", { name: "Keyboard shortcuts" })).toBeInTheDocument();
   expect(screen.getByText("Play / pause")).toBeInTheDocument();
   expect(screen.getByText("Toggle shuffle")).toBeInTheDocument();
 });
 
+test("documents the command palette alongside the player keys", () => {
+  render(<Harness />);
+  fireEvent.keyDown(window, { key: "?" });
+  expect(screen.getByText("Open the command palette")).toBeInTheDocument();
+  expect(screen.getByText("Run the highlighted command")).toBeInTheDocument();
+});
+
 test("ignores ? while typing in a field", () => {
-  render(
-    <>
-      <input aria-label="query" />
-      <ShortcutsHelp />
-    </>,
-  );
+  render(<Harness withInput />);
   const input = screen.getByLabelText("query");
   input.focus();
   fireEvent.keyDown(input, { key: "?" });

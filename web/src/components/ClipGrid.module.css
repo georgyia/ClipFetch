@@ -7,9 +7,46 @@
   padding: 0;
 }
 
+/*
+ * Entrance stagger. Cards start hidden only once the grid is known to be observable — the hook
+ * reports revealed immediately when IntersectionObserver is missing or reduced motion is on, so
+ * content is never left invisible by a capability the browser does not have.
+ *
+ * The delay is a per-item custom property rather than an :nth-child ladder, so the same rule
+ * handles a 6-card grid and a 600-card one.
+ */
+.grid[data-revealed="false"] .item {
+  opacity: 0;
+}
+
+.grid[data-revealed="true"] .item {
+  animation: card-in var(--duration-slow) var(--ease-emphasized) both;
+  animation-delay: var(--stagger, 0ms);
+}
+
+@keyframes card-in {
+  from {
+    opacity: 0;
+    transform: translateY(12px) scale(0.98);
+  }
+
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
 @media (min-width: 768px) {
   .grid {
     grid-template-columns: repeat(auto-fill, minmax(168px, 1fr));
     gap: var(--space-6);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .grid[data-revealed="false"] .item,
+  .grid[data-revealed="true"] .item {
+    opacity: 1;
+    animation: none;
   }
 }
