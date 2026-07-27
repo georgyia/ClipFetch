@@ -1,0 +1,42 @@
+/*
+ * A sheen that travels across the placeholder rather than a whole-block opacity pulse. A pulse
+ * makes a page of skeletons blink in unison, which reads as a fault; a travelling highlight reads
+ * as work in progress.
+ *
+ * The gradient is painted into background-size: 200% and moved with background-position, so the
+ * animation stays on one property and never triggers layout.
+ */
+.skeleton {
+  display: block;
+  width: 100%;
+  height: 1em;
+  border-radius: var(--radius-small);
+  background-color: var(--color-surface-hover);
+  background-image: linear-gradient(
+    90deg,
+    transparent 0%,
+    color-mix(in srgb, var(--color-text) 7%, transparent) 50%,
+    transparent 100%
+  );
+  background-size: 200% 100%;
+  background-repeat: no-repeat;
+  animation: shimmer 1.4s var(--ease-standard) infinite;
+}
+
+@keyframes shimmer {
+  from {
+    background-position: -100% 0;
+  }
+
+  to {
+    background-position: 100% 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .skeleton {
+    /* Static, but still visibly a placeholder rather than an empty box. */
+    animation: none;
+    background-image: none;
+  }
+}

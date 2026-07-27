@@ -5,7 +5,8 @@ import { Button } from "../components/Button";
 import { ClipGrid } from "../components/ClipGrid";
 import { EmptyState } from "../components/EmptyState";
 import { ErrorState } from "../components/ErrorState";
-import { LoadingState } from "../components/LoadingState";
+import { SkeletonGrid } from "../components/Skeletons";
+import { Icons } from "../components/icons";
 import { loadRecentSearches, pushRecentSearch } from "../lib/recentSearches";
 import { useDebouncedValue } from "../lib/useDebouncedValue";
 import styles from "./SearchPage.module.css";
@@ -105,16 +106,42 @@ export function SearchPage() {
           </div>
         ) : (
           <EmptyState
+            icon={Icons.search}
             title="Search your library"
-            description="Find clips by caption, creator, hashtag, or transcript."
+            description="Find clips by caption, creator, hashtag, or transcript. Meaning search kicks in when the semantic index is available."
           />
         )
       ) : query.isLoading ? (
-        <LoadingState label="Searching…" />
+        <SkeletonGrid label="Searching" />
       ) : query.isError ? (
-        <ErrorState title="Search failed" description="Try again in a moment." />
+        <ErrorState
+          title="Search failed"
+          description="The local server did not answer this query."
+          onRetry={() => query.refetch()}
+          retrying={query.isFetching}
+        />
       ) : items.length === 0 ? (
-        <EmptyState title="No results" description={`Nothing matched "${debounced.trim()}".`} />
+        <EmptyState
+          icon={Icons.search}
+          title="No results"
+          description={`Nothing matched "${debounced.trim()}". Try a shorter phrase, a creator name, or a hashtag.`}
+        >
+          {recents.length > 0 ? (
+            <>
+              <span className={styles.recentTitle}>Recent searches</span>
+              {recents.map((item) => (
+                <button
+                  key={item}
+                  type="button"
+                  className={styles.chip}
+                  onClick={() => setTerm(item)}
+                >
+                  {item}
+                </button>
+              ))}
+            </>
+          ) : null}
+        </EmptyState>
       ) : (
         <div>
           <p className={styles.count} aria-live="polite">
@@ -123,8 +150,12 @@ export function SearchPage() {
           <ClipGrid items={items} label="Search results" />
           {query.hasNextPage ? (
             <div style={{ display: "flex", justifyContent: "center", marginTop: "var(--space-8)" }}>
-              <Button onClick={() => query.fetchNextPage()} disabled={query.isFetchingNextPage}>
-                {query.isFetchingNextPage ? "Loading…" : "Load more"}
+              <Button
+                icon={Icons.chevronDown}
+                loading={query.isFetchingNextPage}
+                onClick={() => query.fetchNextPage()}
+              >
+                Load more
               </Button>
             </div>
           ) : null}

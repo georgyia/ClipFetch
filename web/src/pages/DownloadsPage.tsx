@@ -10,7 +10,7 @@ import {
 import type { Account, Job } from "../api/types";
 import { Button } from "../components/Button";
 import { ErrorState } from "../components/ErrorState";
-import { LoadingState } from "../components/LoadingState";
+import { SkeletonList } from "../components/Skeletons";
 import { useToast } from "../components/Toast";
 import styles from "./DownloadsPage.module.css";
 
@@ -260,7 +260,7 @@ export function DownloadsPage() {
       </p>
 
       {jobs.isLoading ? (
-        <LoadingState label="Loading downloads…" />
+        <SkeletonList label="Loading downloads" />
       ) : jobs.isError ? (
         <ErrorState title="Could not load downloads" description="Try again in a moment." />
       ) : (

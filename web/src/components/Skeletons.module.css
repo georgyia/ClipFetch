@@ -1,0 +1,136 @@
+/*
+ * Every measurement here is copied from the real component it stands in for. If ClipCard's gap or
+ * ClipGrid's minmax() changes, the matching value below has to change with it — that coupling is
+ * the price of zero layout shift on load.
+ */
+
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3); /* ClipCard */
+}
+
+.poster {
+  aspect-ratio: 9 / 16; /* ClipCard */
+  height: auto;
+}
+
+/* ------------------------------------------------------------------- rail */
+
+.rail {
+  margin-bottom: var(--space-9);
+}
+
+.railHeader {
+  margin-bottom: var(--space-5);
+}
+
+.railTrack {
+  display: flex;
+  gap: var(--space-5); /* ClipRail */
+  overflow: hidden;
+}
+
+.railItem {
+  flex: none;
+  width: 140px; /* ClipRail card width */
+}
+
+@media (min-width: 768px) {
+  .railItem {
+    width: 168px;
+  }
+}
+
+/* ------------------------------------------------------------------- grid */
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); /* ClipGrid */
+  gap: var(--space-5);
+}
+
+@media (min-width: 768px) {
+  .grid {
+    grid-template-columns: repeat(auto-fill, minmax(168px, 1fr));
+    gap: var(--space-6);
+  }
+}
+
+/* ------------------------------------------------------------------- hero */
+
+.hero {
+  display: flex;
+  align-items: flex-end;
+  min-height: clamp(320px, 46vh, 520px); /* Hero */
+  padding: var(--space-9) var(--space-8);
+  margin-bottom: var(--space-9);
+  border-radius: var(--radius-xl);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border-subtle);
+  overflow: hidden;
+}
+
+.heroContent {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  width: 100%;
+  max-width: 640px;
+}
+
+.heroActions {
+  display: flex;
+  gap: var(--space-4);
+  margin-top: var(--space-3);
+}
+
+/* ----------------------------------------------------------------- detail */
+
+.detail {
+  display: grid;
+  gap: var(--space-8);
+  grid-template-columns: 1fr;
+}
+
+.detailMedia {
+  aspect-ratio: 9 / 16;
+  height: auto;
+  max-width: 360px;
+}
+
+.detailMeta {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+}
+
+.detailChips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+}
+
+@media (min-width: 900px) {
+  .detail {
+    grid-template-columns: minmax(280px, 360px) 1fr;
+  }
+}
+
+/* ------------------------------------------------------------------- list */
+
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.listRow {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-5) var(--space-6);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-panel);
+  background: var(--color-surface);
+}

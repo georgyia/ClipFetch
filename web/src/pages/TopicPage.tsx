@@ -1,6 +1,8 @@
-import { useParams } from "react-router-dom";
+import { Link, useParams } from "react-router-dom";
 import { useClipList } from "../api/queries";
+import { Button } from "../components/Button";
 import { ClipListView } from "../components/ClipListView";
+import { Icons } from "../components/icons";
 import { titleize } from "../lib/format";
 
 // A single topic as a browsable channel: a paginated grid of its clips.
@@ -20,8 +22,16 @@ export function TopicPage() {
       <ClipListView
         title={titleize(slug)}
         query={query}
+        emptyIcon={Icons.topics}
         emptyTitle="No clips in this topic"
-        emptyDescription="Clips tagged with this topic will appear here."
+        emptyDescription="Topics are derived from captions and hashtags as clips are catalogued."
+        emptyAction={
+          <Link to="/explore">
+            <Button variant="primary" icon={Icons.explore}>
+              Explore other topics
+            </Button>
+          </Link>
+        }
         queueContext={{ from: "topic", key: slug }}
       />
     </section>

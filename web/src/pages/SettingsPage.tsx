@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useAccounts, useConnectAccount, useDiagnostics } from "../api/queries";
 import { Button } from "../components/Button";
 import { ErrorState } from "../components/ErrorState";
-import { LoadingState } from "../components/LoadingState";
+import { SkeletonList } from "../components/Skeletons";
 import { ThemeToggle } from "../components/ThemeToggle";
 import { Icons } from "../components/icons";
 import { titleize } from "../lib/format";
@@ -50,7 +50,7 @@ export function SettingsPage() {
           <h1>Settings</h1>
         </div>
         <div className={styles.grid}>{appearance}</div>
-        <LoadingState label="Loading diagnostics…" />
+        <SkeletonList label="Loading diagnostics" rows={3} />
       </section>
     );
   }
