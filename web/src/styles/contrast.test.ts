@@ -46,7 +46,7 @@ function luminance(hex: string): number {
   return 0.2126 * channel(r) + 0.7152 * channel(g) + 0.0722 * channel(b);
 }
 
-export function contrast(a: string, b: string): number {
+function contrast(a: string, b: string): number {
   const la = luminance(a);
   const lb = luminance(b);
   const [light, dark] = la > lb ? [la, lb] : [lb, la];
