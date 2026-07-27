@@ -1,7 +1,10 @@
 import type { ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { BrandMark } from "../components/BrandMark";
+import { Icon } from "../components/Icon";
 import { ThemeToggle } from "../components/ThemeToggle";
+import { Icons } from "../components/icons";
+import { openCommandPalette } from "../lib/overlays";
 import { useScrolled } from "../lib/useScrolled";
 import styles from "./AppShell.module.css";
 import { LibrarySelector } from "./LibrarySelector";
@@ -10,6 +13,13 @@ import { RouteAnnouncer } from "./RouteAnnouncer";
 
 export interface AppShellProps {
   children: ReactNode;
+}
+
+/** Show the modifier the user's own platform actually uses, rather than always printing ⌘. */
+function shortcutHint(): string {
+  const platform =
+    typeof navigator === "undefined" ? "" : navigator.platform || navigator.userAgent || "";
+  return /mac|iphone|ipad/i.test(platform) ? "⌘K" : "Ctrl K";
 }
 
 /**
@@ -37,6 +47,15 @@ export function AppShell({ children }: AppShellProps) {
           </span>
         </Link>
         <div className={styles.headerSpacer} />
+        {/*
+          A visible entry point for the palette: ⌘K is only discoverable if something tells you it
+          exists, so the button doubles as the hint.
+        */}
+        <button type="button" className={styles.paletteTrigger} onClick={openCommandPalette}>
+          <Icon icon={Icons.search} size="sm" />
+          <span className={styles.paletteLabel}>Search or jump to…</span>
+          <kbd className={styles.paletteKey}>{shortcutHint()}</kbd>
+        </button>
         <ThemeToggle compact />
         <LibrarySelector />
       </header>

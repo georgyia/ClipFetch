@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { closeShortcutsHelp, useShortcutsHelpOpen } from "../lib/overlays";
 import { Dialog } from "./Dialog";
 import styles from "./ShortcutsHelp.module.css";
 
@@ -7,7 +7,16 @@ interface Shortcut {
   action: string;
 }
 
-const GLOBAL: Shortcut[] = [{ keys: ["?"], action: "Show this help" }];
+const GLOBAL: Shortcut[] = [
+  { keys: ["⌘K", "Ctrl+K"], action: "Open the command palette" },
+  { keys: ["?"], action: "Show this help" },
+];
+
+const PALETTE: Shortcut[] = [
+  { keys: ["↑", "↓"], action: "Move between results" },
+  { keys: ["↵"], action: "Run the highlighted command" },
+  { keys: ["Esc"], action: "Close the palette" },
+];
 
 const PLAYER: Shortcut[] = [
   { keys: ["Space", "K"], action: "Play / pause" },
@@ -44,31 +53,16 @@ function Section({ title, shortcuts }: { title: string; shortcuts: Shortcut[] })
 }
 
 /**
- * A global "?" opens a keyboard-shortcuts cheat sheet. Ignored while typing in a field, so "?" in a
- * search box still types a question mark.
+ * The keyboard cheat sheet. Open state lives in the shared overlay store, so both the global "?"
+ * binding and the command palette's "Show keyboard shortcuts" action drive the same dialog.
  */
 export function ShortcutsHelp() {
-  const [open, setOpen] = useState(false);
-
-  useEffect(() => {
-    function onKey(event: KeyboardEvent) {
-      if (event.key !== "?") {
-        return;
-      }
-      const target = event.target as HTMLElement | null;
-      if (target && /^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName)) {
-        return;
-      }
-      event.preventDefault();
-      setOpen((value) => !value);
-    }
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, []);
+  const open = useShortcutsHelpOpen();
 
   return (
-    <Dialog open={open} onClose={() => setOpen(false)} title="Keyboard shortcuts">
+    <Dialog open={open} onClose={closeShortcutsHelp} title="Keyboard shortcuts">
       <Section title="Anywhere" shortcuts={GLOBAL} />
+      <Section title="Command palette" shortcuts={PALETTE} />
       <Section title="Browsing" shortcuts={BROWSING} />
       <Section title="Player" shortcuts={PLAYER} />
     </Dialog>

@@ -1,0 +1,25 @@
+/*
+ * Only opacity and transform animate, so a route change never triggers layout or paint work on
+ * the main thread — it stays a compositor job even on a page full of posters.
+ */
+.page {
+  animation: page-in var(--duration-slow) var(--ease-emphasized) both;
+}
+
+@keyframes page-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .page {
+    animation: none;
+  }
+}
