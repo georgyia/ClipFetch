@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import { makeClip } from "../test/fixtures";
@@ -42,6 +42,14 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
+/**
+ * Facet chips and active-filter chips deliberately share labels ("TikTok" appears in both rows),
+ * so queries are scoped to one region or the other rather than searching the whole page.
+ */
+function facets() {
+  return within(screen.getByLabelText("Filters"));
+}
+
 function renderExplore(initial = "/explore") {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
@@ -53,19 +61,75 @@ function renderExplore(initial = "/explore") {
   );
 }
 
-test("changing a filter updates the request query", async () => {
+test("selecting a facet chip updates the request query", async () => {
   renderExplore();
   await waitFor(() => expect(lastClipsUrl).toContain("/clips"));
-  fireEvent.change(screen.getByLabelText("Platform"), { target: { value: "tiktok" } });
+
+  fireEvent.click(facets().getByRole("button", { name: /TikTok/ }));
   await waitFor(() => expect(lastClipsUrl).toContain("platform=tiktok"));
 });
 
-test("hydrates filter controls from the URL", async () => {
+test("a chip toggles off when its own value is re-selected", async () => {
+  renderExplore("/explore?platform=tiktok");
+  await waitFor(() => expect(lastClipsUrl).toContain("platform=tiktok"));
+
+  const chip = facets().getByRole("button", { name: /TikTok/ });
+  expect(chip).toHaveAttribute("aria-pressed", "true");
+
+  fireEvent.click(chip);
+  await waitFor(() => expect(lastClipsUrl).not.toContain("platform=tiktok"));
+});
+
+test("hydrates facet state from the URL", async () => {
   renderExplore("/explore?sort=likes&topic=cooking");
   await waitFor(() => expect(lastClipsUrl).toContain("sort=likes"));
-  expect((screen.getByLabelText("Sort") as HTMLSelectElement).value).toBe("likes");
-  // The topic option appears once the topics query resolves.
-  await waitFor(() =>
-    expect((screen.getByLabelText("Topic") as HTMLSelectElement).value).toBe("cooking"),
+
+  expect(facets().getByRole("button", { name: /Most liked/ })).toHaveAttribute(
+    "aria-pressed",
+    "true",
   );
+  expect(facets().getByRole("button", { name: /Newest/ })).toHaveAttribute("aria-pressed", "false");
+  // The topic chip appears once the topics query resolves.
+  await waitFor(() =>
+    expect(facets().getByRole("button", { name: /Cooking/ })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    ),
+  );
+});
+
+test("active filters are listed as chips that clear individually", async () => {
+  renderExplore("/explore?platform=tiktok&min_likes=10000");
+  await waitFor(() => expect(lastClipsUrl).toContain("platform=tiktok"));
+
+  const activeRow = screen.getByLabelText("Active filters");
+  expect(within(activeRow).getByText("TikTok")).toBeInTheDocument();
+  expect(within(activeRow).getByText("10K+ likes")).toBeInTheDocument();
+
+  fireEvent.click(screen.getByRole("button", { name: "Remove TikTok filter" }));
+  await waitFor(() => expect(lastClipsUrl).not.toContain("platform=tiktok"));
+  // The other filter survives — removing one chip must not clear the rest.
+  expect(lastClipsUrl).toContain("min_likes=10000");
+});
+
+test("Clear all drops every filter but keeps the sort preference", async () => {
+  renderExplore("/explore?sort=likes&platform=tiktok&min_likes=10000");
+  await waitFor(() => expect(lastClipsUrl).toContain("platform=tiktok"));
+
+  fireEvent.click(screen.getByRole("button", { name: "Clear all" }));
+
+  await waitFor(() => expect(lastClipsUrl).not.toContain("platform=tiktok"));
+  expect(lastClipsUrl).not.toContain("min_likes");
+  // Sort is a view preference, not a filter.
+  expect(lastClipsUrl).toContain("sort=likes");
+});
+
+test("offers Play all and Shuffle so a filtered set becomes a queue", async () => {
+  renderExplore();
+  expect(
+    await screen.findByRole("button", { name: "Play all clips in this view" }),
+  ).toBeInTheDocument();
+  expect(
+    screen.getByRole("button", { name: "Shuffle-play clips in this view" }),
+  ).toBeInTheDocument();
 });

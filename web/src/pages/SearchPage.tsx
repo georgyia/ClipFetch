@@ -1,12 +1,15 @@
 import { useEffect, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useSearch } from "../api/queries";
+import { Badge } from "../components/Badge";
 import { Button } from "../components/Button";
+import { Chip } from "../components/Chip";
 import { ClipGrid } from "../components/ClipGrid";
 import { EmptyState } from "../components/EmptyState";
 import { ErrorState } from "../components/ErrorState";
 import { SkeletonGrid } from "../components/Skeletons";
 import { Icons } from "../components/icons";
+import { titleize } from "../lib/format";
 import { loadRecentSearches, pushRecentSearch } from "../lib/recentSearches";
 import { useDebouncedValue } from "../lib/useDebouncedValue";
 import styles from "./SearchPage.module.css";
@@ -54,6 +57,9 @@ export function SearchPage() {
   const result = query.data?.pages[0];
   const items = query.data?.pages.flatMap((page) => page.items) ?? [];
   const fellBack = mode === "meaning" && result != null && result.mode_used !== "meaning";
+  // Whether the server has answered at all yet, versus what it said about semantic support.
+  const semanticKnown = result != null;
+  const semanticAvailable = result?.semantic_available ?? false;
 
   return (
     <section aria-label="Search" className={styles.search}>
@@ -69,21 +75,29 @@ export function SearchPage() {
 
       <div className={styles.modes} role="group" aria-label="Search mode">
         {MODES.map(([value, label]) => (
-          <button
+          <Chip
             key={value}
-            type="button"
-            className={`${styles.mode} ${mode === value ? styles.modeActive : ""}`.trim()}
-            aria-pressed={mode === value}
-            onClick={() => setMode(value)}
+            selected={mode === value}
+            disabled={value === "meaning" && semanticKnown && !semanticAvailable}
+            onToggle={() => setMode(value)}
           >
             {label}
-          </button>
+          </Chip>
         ))}
+        {/*
+          Honest capability signalling: the badge states which mode actually ran, so "Meaning"
+          never silently behaves like text search. It only appears once the server has told us.
+        */}
+        {result ? (
+          <Badge tone={fellBack ? "warning" : "neutral"} icon={Icons.sparkle}>
+            {fellBack ? "Text matches" : `${titleize(result.mode_used)} matches`}
+          </Badge>
+        ) : null}
       </div>
 
       {fellBack ? (
         <p className={styles.banner} role="status">
-          Meaning search isn't available yet — showing text matches instead.
+          Meaning search isn't available in this library yet — showing text matches instead.
         </p>
       ) : null}
 

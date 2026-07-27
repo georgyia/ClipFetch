@@ -2,6 +2,7 @@ import type { ClipSummary } from "../api/types";
 import { useRevealOnScroll } from "../lib/useRevealOnScroll";
 import { ClipCard } from "./ClipCard";
 import styles from "./ClipGrid.module.css";
+import { VirtualClipGrid } from "./VirtualClipGrid";
 
 export interface ClipGridProps {
   items: ClipSummary[];
@@ -15,9 +16,22 @@ export interface ClipGridProps {
  */
 const STAGGER_LIMIT = 12;
 
+/**
+ * Above this many items the grid switches to windowed rendering.
+ *
+ * Below it, measurement and absolute positioning cost more than they save, and the plain grid gets
+ * the entrance stagger — which a virtualized grid cannot have, since rows mount and unmount as you
+ * scroll and would re-animate every time.
+ */
+const VIRTUALIZE_ABOVE = 60;
+
 /** Responsive, density-adaptive grid of clip cards for library, topic, and search views. */
 export function ClipGrid({ items, label, progressById }: ClipGridProps) {
   const { ref, revealed } = useRevealOnScroll<HTMLUListElement>();
+
+  if (items.length > VIRTUALIZE_ABOVE) {
+    return <VirtualClipGrid items={items} label={label} progressById={progressById} />;
+  }
 
   return (
     <ul className={styles.grid} aria-label={label} ref={ref} data-revealed={revealed}>
