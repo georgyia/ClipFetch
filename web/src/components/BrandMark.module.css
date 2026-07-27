@@ -1,0 +1,5 @@
+.mark {
+  display: block;
+  flex: none;
+  filter: drop-shadow(0 2px 8px rgb(255 77 103 / 30%));
+}

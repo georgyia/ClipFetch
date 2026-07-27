@@ -2,6 +2,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { useClipDetail, useClipList, usePlayback, useSavePlayback } from "../api/queries";
 import { mediaUrl } from "../api/types";
+import { Icon } from "../components/Icon";
+import { Icons } from "../components/icons";
 import { formatDuration } from "../lib/format";
 import { parseQueueSource, seededShuffle } from "../lib/queueSource";
 import styles from "./PlayerPage.module.css";
@@ -213,7 +215,7 @@ export function PlayerPage() {
           onClick={() => navigate(-1)}
           aria-label="Close player"
         >
-          ✕
+          <Icon icon={Icons.close} size="md" />
         </button>
         <h1 className={styles.heading}>{title}</h1>
       </div>
@@ -277,7 +279,7 @@ export function PlayerPage() {
             disabled={!prevId}
             aria-label="Previous clip"
           >
-            ⏮
+            <Icon icon={Icons.previous} size="md" />
           </button>
           <button
             type="button"
@@ -285,7 +287,7 @@ export function PlayerPage() {
             onClick={togglePlay}
             aria-label={playing ? "Pause" : "Play"}
           >
-            {playing ? "⏸" : "▶"}
+            <Icon icon={playing ? Icons.pause : Icons.play} size="lg" />
           </button>
           <button
             type="button"
@@ -294,7 +296,7 @@ export function PlayerPage() {
             disabled={!nextId}
             aria-label="Next clip"
           >
-            ⏭
+            <Icon icon={Icons.next} size="md" />
           </button>
           <button
             type="button"
@@ -303,7 +305,7 @@ export function PlayerPage() {
             aria-label={muted ? "Unmute" : "Mute"}
             aria-pressed={muted}
           >
-            {muted ? "🔇" : "🔊"}
+            <Icon icon={muted ? Icons.mute : Icons.unmute} size="md" />
           </button>
           <button
             type="button"
@@ -312,7 +314,7 @@ export function PlayerPage() {
             aria-label="Shuffle"
             aria-pressed={shuffleOn}
           >
-            🔀
+            <Icon icon={Icons.shuffle} size="md" />
           </button>
           <button
             type="button"

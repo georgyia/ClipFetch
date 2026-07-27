@@ -1,0 +1,6 @@
+.icon {
+  /* Icons sit on the text baseline-box, not the line box, so they centre inside flex rows. */
+  display: block;
+  flex: none;
+  color: currentcolor;
+}

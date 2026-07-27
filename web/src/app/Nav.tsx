@@ -1,4 +1,5 @@
 import { NavLink } from "react-router-dom";
+import { Icon } from "../components/Icon";
 import styles from "./AppShell.module.css";
 import { NAV_ITEMS } from "./navItems";
 
@@ -22,8 +23,8 @@ export function Nav({ variant }: NavProps) {
                 `${styles.navLink} ${isActive ? styles.navLinkActive : ""}`.trim()
               }
             >
-              <span className={styles.navIcon} aria-hidden="true">
-                {item.icon}
+              <span className={styles.navIcon}>
+                <Icon icon={item.icon} size="lg" />
               </span>
               <span>{item.label}</span>
             </NavLink>

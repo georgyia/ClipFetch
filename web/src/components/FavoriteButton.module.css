@@ -2,7 +2,7 @@
   display: inline-flex;
   align-items: center;
   gap: var(--space-3);
-  min-height: 44px;
+  min-height: var(--hit-target);
   padding: 0 var(--space-6);
   border-radius: var(--radius-control);
   border: 1px solid var(--color-border);
@@ -10,10 +10,27 @@
   color: var(--color-text);
   font: var(--text-label);
   cursor: pointer;
+  box-shadow: var(--elevation-1);
+  transition:
+    background-color var(--duration-fast) var(--ease-standard),
+    border-color var(--duration-fast) var(--ease-standard),
+    color var(--duration-fast) var(--ease-standard),
+    box-shadow var(--duration-base) var(--ease-standard),
+    transform var(--duration-instant) var(--ease-standard);
 }
 
 .button:hover:not(:disabled) {
   background: var(--color-surface-hover);
+  border-color: var(--color-border-strong);
+}
+
+.button:active:not(:disabled) {
+  transform: scale(calc(1 - 0.03 * var(--motion-scale)));
+}
+
+.button:focus-visible {
+  outline: none;
+  box-shadow: var(--ring);
 }
 
 .button:disabled {
@@ -21,12 +38,51 @@
   cursor: not-allowed;
 }
 
+.compact {
+  padding: 0;
+  width: var(--hit-target);
+  justify-content: center;
+}
+
 .active {
   color: var(--color-accent);
   border-color: color-mix(in srgb, var(--color-accent) 50%, transparent);
+  background: var(--color-accent-wash);
 }
 
+.active:hover:not(:disabled) {
+  background: var(--color-accent-wash-strong);
+  border-color: var(--color-accent);
+  box-shadow: var(--elevation-2), var(--accent-glow);
+}
+
+/* Outline while unfavorited; the heart fills solid the moment it is on. */
 .heart {
-  font-size: 16px;
-  line-height: 1;
+  fill: none;
+}
+
+.filled {
+  fill: currentcolor;
+  /* A single, restrained pop confirms the toggle without turning into a party trick. */
+  animation: favorite-pop var(--duration-slow) var(--ease-spring);
+}
+
+@keyframes favorite-pop {
+  0% {
+    transform: scale(1);
+  }
+
+  45% {
+    transform: scale(1.28);
+  }
+
+  100% {
+    transform: scale(1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .filled {
+    animation: none;
+  }
 }

@@ -1,4 +1,5 @@
-import styles from "./Badge.module.css";
+import { Badge, type BadgeTone } from "./Badge";
+import { Icons } from "./icons";
 
 export interface QualityBadgeProps {
   /** Tier slug from the probed media block: unknown | sd | hd | full_hd | uhd. */
@@ -17,12 +18,28 @@ const FALLBACK_LABELS: Record<string, string> = {
   uhd: "4K",
 };
 
+/**
+ * Tone encodes the tier so quality is legible at a glance: the good tiers read as positive, SD as
+ * a caution, and an unprobed file stays neutral rather than implying a verdict it doesn't have.
+ */
+const TONES: Record<string, BadgeTone> = {
+  unknown: "neutral",
+  sd: "warning",
+  hd: "info",
+  full_hd: "success",
+  uhd: "violet",
+};
+
 // A technical-quality badge measured from the probed file — distinct from a download preference.
 export function QualityBadge({ tier, label, reason }: QualityBadgeProps) {
   const text = label ?? FALLBACK_LABELS[tier] ?? "Unknown";
   return (
-    <span className={`${styles.badge} ${styles.quality}`} title={reason ?? `Quality: ${text}`}>
+    <Badge
+      tone={TONES[tier] ?? "neutral"}
+      icon={Icons.quality}
+      title={reason ?? `Quality: ${text}`}
+    >
       {text}
-    </span>
+    </Badge>
   );
 }

@@ -4,6 +4,8 @@ import { type ClipSummary, mediaUrl, posterUrl } from "../api/types";
 import { compactCount } from "../lib/format";
 import { previewSuppressed } from "../lib/useHoverPreview";
 import styles from "./Hero.module.css";
+import { Icon } from "./Icon";
+import { Icons } from "./icons";
 
 export interface HeroProps {
   clip: ClipSummary;
@@ -60,7 +62,8 @@ export function Hero({ clip, eyebrow = "Featured" }: HeroProps) {
         {bits.length > 0 ? <p className={styles.sub}>{bits.join(" · ")}</p> : null}
         <div className={styles.actions}>
           <Link className={styles.play} to={detail}>
-            <span aria-hidden="true">▶</span> Play
+            <Icon icon={Icons.play} size="md" className={styles.playIcon} />
+            Play
           </Link>
           <Link className={styles.info} to={detail}>
             More info

@@ -83,6 +83,6 @@ test("renders a hero and the server-ordered rails", async () => {
   expect(await screen.findByRole("region", { name: "Recently Added" })).toBeInTheDocument();
   expect(screen.getByRole("region", { name: "Cooking" })).toBeInTheDocument();
   // The see-all link uses the server-provided destination.
-  const seeAll = screen.getAllByRole("link", { name: "See all →" })[0];
+  const seeAll = screen.getAllByRole("link", { name: "See all" })[0];
   expect(seeAll).toHaveAttribute("href", "/library/recent");
 });

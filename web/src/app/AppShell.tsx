@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { Link } from "react-router-dom";
+import { BrandMark } from "../components/BrandMark";
 import styles from "./AppShell.module.css";
 import { LibrarySelector } from "./LibrarySelector";
 import { Nav } from "./Nav";
@@ -19,7 +20,10 @@ export function AppShell({ children }: AppShellProps) {
       <RouteAnnouncer />
       <header className={styles.header}>
         <Link to="/" className={styles.brand}>
-          <span className={styles.brandMark}>◐</span> ClipFetch <span>Watch</span>
+          <BrandMark />
+          <span className={styles.brandName}>
+            ClipFetch <span className={styles.brandSuffix}>Watch</span>
+          </span>
         </Link>
         <div className={styles.headerSpacer} />
         <LibrarySelector />

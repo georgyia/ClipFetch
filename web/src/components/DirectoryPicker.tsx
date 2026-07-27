@@ -2,6 +2,8 @@ import { useState } from "react";
 import { useDirListing } from "../api/queries";
 import { Button } from "./Button";
 import styles from "./DirectoryPicker.module.css";
+import { Icon } from "./Icon";
+import { Icons } from "./icons";
 
 interface DirectoryPickerProps {
   /** Called with the absolute path of the folder the user chose. */
@@ -47,8 +49,8 @@ export function DirectoryPicker({ onChoose, busy = false }: DirectoryPickerProps
           {data.entries.map((entry) => (
             <li key={entry.path}>
               <button type="button" className={styles.row} onClick={() => setPath(entry.path)}>
-                <span className={styles.icon} aria-hidden="true">
-                  🗀
+                <span className={styles.icon}>
+                  <Icon icon={entry.is_library ? Icons.library : Icons.folder} size="md" />
                 </span>
                 <span className={styles.name}>{entry.name}</span>
                 {entry.is_library ? <span className={styles.tag}>Library</span> : null}
