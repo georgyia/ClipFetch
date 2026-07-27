@@ -56,7 +56,9 @@ test("debounces input and shows results", async () => {
 
 test("meaning mode shows a fallback notice when semantic is unavailable", async () => {
   renderSearch("/search?q=pasta&mode=meaning");
-  expect(await screen.findByText(/Meaning search isn't available yet/)).toBeInTheDocument();
+  expect(
+    await screen.findByText(/Meaning search isn't available in this library yet/),
+  ).toBeInTheDocument();
 });
 
 test("prompts before any query is entered", () => {

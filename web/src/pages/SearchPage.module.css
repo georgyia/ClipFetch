@@ -74,3 +74,12 @@
   margin: var(--space-5) 0;
   color: var(--color-text-secondary);
 }
+
+/* Mode chips and the capability badge share one row and stay aligned as the badge appears. */
+.modes {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  margin-bottom: var(--space-6);
+}

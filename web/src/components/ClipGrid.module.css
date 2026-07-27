@@ -50,3 +50,26 @@
     animation: none;
   }
 }
+
+/* ------------------------------------------------------- virtualized grid */
+
+/*
+ * The windowed variant. Rows are absolutely positioned by the virtualizer, so this element exists
+ * only to hold the total scroll height; the columns live on each row.
+ */
+.virtualBody {
+  position: relative;
+  width: 100%;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.virtualRow {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  display: grid;
+  /* grid-template-columns and gap are set inline from the measured geometry. */
+}

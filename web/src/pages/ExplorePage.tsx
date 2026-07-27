@@ -2,7 +2,10 @@ import { type FormEvent, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useClipList, useTopics } from "../api/queries";
 import { Button } from "../components/Button";
+import { Chip } from "../components/Chip";
 import { ClipListView } from "../components/ClipListView";
+import { Icon } from "../components/Icon";
+import { Icons } from "../components/icons";
 import { titleize } from "../lib/format";
 import styles from "./ExplorePage.module.css";
 
@@ -14,10 +17,19 @@ const SORTS = [
 ] as const;
 
 const PLATFORMS = [
-  ["", "All platforms"],
   ["instagram", "Instagram"],
   ["tiktok", "TikTok"],
 ] as const;
+
+const MIN_LIKES = [
+  ["1000", "1K+"],
+  ["10000", "10K+"],
+  ["100000", "100K+"],
+  ["1000000", "1M+"],
+] as const;
+
+/** Topics shown as chips before the rest fold into a select. */
+const TOPIC_CHIP_LIMIT = 10;
 
 function buildPath(params: URLSearchParams, cursor: string | null): string {
   const query = new URLSearchParams({ limit: "24", sort: params.get("sort") || "date" });
@@ -37,12 +49,45 @@ function buildPath(params: URLSearchParams, cursor: string | null): string {
   return `/api/v1/clips?${query.toString()}`;
 }
 
-// Explore: filter the library by topic, platform, creator, popularity, and sort. All filter state
-// lives in the URL so views are shareable and the back button restores them.
+interface ActiveFilter {
+  field: string;
+  label: string;
+}
+
+/** The filters currently narrowing the view, as dismissible chips. Sort is not a filter. */
+function activeFilters(params: URLSearchParams, topicLabel: (slug: string) => string) {
+  const active: ActiveFilter[] = [];
+  const topic = params.get("topic");
+  if (topic) {
+    active.push({ field: "topic", label: topicLabel(topic) });
+  }
+  const platform = params.get("platform");
+  if (platform) {
+    const match = PLATFORMS.find(([value]) => value === platform);
+    active.push({ field: "platform", label: match?.[1] ?? platform });
+  }
+  const minLikes = params.get("min_likes");
+  if (minLikes) {
+    const match = MIN_LIKES.find(([value]) => value === minLikes);
+    active.push({ field: "min_likes", label: `${match?.[1] ?? minLikes} likes` });
+  }
+  const creator = params.get("creator");
+  if (creator) {
+    active.push({ field: "creator", label: `@${creator}` });
+  }
+  return active;
+}
+
+/**
+ * Explore: narrow the library by topic, platform, creator, popularity, and sort.
+ *
+ * Every facet is a chip, and all filter state lives in the URL — views are shareable, the back
+ * button restores them, and the same params seed the player's queue so a filtered set becomes
+ * something you can binge.
+ */
 export function ExplorePage() {
   const [params, setParams] = useSearchParams();
   const topics = useTopics();
-  const [open, setOpen] = useState(false);
   const [creator, setCreator] = useState(params.get("creator") ?? "");
 
   function update(next: Record<string, string>) {
@@ -57,130 +102,178 @@ export function ExplorePage() {
     setParams(merged, { replace: true });
   }
 
+  /** Chips toggle: choosing the value that is already set clears it. */
+  function toggle(field: string, value: string) {
+    update({ [field]: params.get(field) === value ? "" : value });
+  }
+
+  function clearAll() {
+    // Sort is a view preference rather than a filter, so "Clear all" leaves it alone.
+    const sort = params.get("sort");
+    setParams(sort ? new URLSearchParams({ sort }) : new URLSearchParams(), { replace: true });
+    setCreator("");
+  }
+
   function onSubmitCreator(event: FormEvent) {
     event.preventDefault();
     update({ creator: creator.trim() });
   }
+
+  const allTopics = topics.data?.topics ?? [];
+  const topicLabel = (slug: string) => titleize(slug);
+  const chipTopics = allTopics.slice(0, TOPIC_CHIP_LIMIT);
+  const overflowTopics = allTopics.slice(TOPIC_CHIP_LIMIT);
+  const selectedTopic = params.get("topic") ?? "";
+  const active = activeFilters(params, topicLabel);
 
   const key = ["explore", params.toString()];
   const query = useClipList(key, (cursor) => buildPath(params, cursor));
 
   return (
     <section aria-label="Explore">
-      <div className={styles.header}>
-        <h1>Explore</h1>
-        <Button
-          className={styles.toggle}
-          onClick={() => setOpen((value) => !value)}
-          aria-expanded={open}
-        >
-          {open ? "Hide filters" : "Filters"}
-        </Button>
-      </div>
+      <h1 className={styles.pageTitle}>Explore</h1>
 
-      <form
-        className={`${styles.filters} ${open ? "" : styles.collapsed}`.trim()}
-        aria-label="Filters"
-        onSubmit={onSubmitCreator}
-      >
-        <div className={styles.field}>
-          <label className={styles.label} htmlFor="filter-topic">
-            Topic
-          </label>
-          <select
-            id="filter-topic"
-            className={styles.control}
-            value={params.get("topic") ?? ""}
-            onChange={(event) => update({ topic: event.target.value })}
-          >
-            <option value="">All topics</option>
-            {(topics.data?.topics ?? []).map((topic) => (
-              <option key={topic.slug} value={topic.slug}>
-                {titleize(topic.slug)} ({topic.clip_count})
-              </option>
-            ))}
-          </select>
-        </div>
-
-        <div className={styles.field}>
-          <label className={styles.label} htmlFor="filter-platform">
-            Platform
-          </label>
-          <select
-            id="filter-platform"
-            className={styles.control}
-            value={params.get("platform") ?? ""}
-            onChange={(event) => update({ platform: event.target.value })}
-          >
-            {PLATFORMS.map(([value, label]) => (
-              <option key={value} value={value}>
-                {label}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        <div className={styles.field}>
-          <label className={styles.label} htmlFor="filter-sort">
-            Sort
-          </label>
-          <select
-            id="filter-sort"
-            className={styles.control}
-            value={params.get("sort") ?? "date"}
-            onChange={(event) => update({ sort: event.target.value })}
-          >
+      {/*
+        The facet bar sticks below the app header while results scroll, so narrowing a large
+        result set never means scrolling back to the top to reach the controls.
+      */}
+      <div className={styles.stickyBar}>
+        <form className={styles.facets} aria-label="Filters" onSubmit={onSubmitCreator}>
+          <div className={styles.facetRow} role="group" aria-label="Sort">
+            <span className={styles.facetLabel}>
+              <Icon icon={Icons.sort} size="xs" />
+              Sort
+            </span>
             {SORTS.map(([value, label]) => (
-              <option key={value} value={value}>
+              <Chip
+                key={value}
+                selected={(params.get("sort") ?? "date") === value}
+                onToggle={() => update({ sort: value })}
+              >
                 {label}
-              </option>
+              </Chip>
             ))}
-          </select>
-        </div>
+          </div>
 
-        <div className={styles.field}>
-          <label className={styles.label} htmlFor="filter-min-likes">
-            Min likes
-          </label>
-          <select
-            id="filter-min-likes"
-            className={styles.control}
-            value={params.get("min_likes") ?? ""}
-            onChange={(event) => update({ min_likes: event.target.value })}
-          >
-            <option value="">Any</option>
-            <option value="1000">1K+</option>
-            <option value="10000">10K+</option>
-            <option value="100000">100K+</option>
-            <option value="1000000">1M+</option>
-          </select>
-        </div>
+          {allTopics.length > 0 ? (
+            <div className={styles.facetRow} role="group" aria-label="Topic">
+              <span className={styles.facetLabel}>
+                <Icon icon={Icons.topics} size="xs" />
+                Topic
+              </span>
+              {chipTopics.map((topic) => (
+                <Chip
+                  key={topic.slug}
+                  count={topic.clip_count}
+                  selected={selectedTopic === topic.slug}
+                  onToggle={() => toggle("topic", topic.slug)}
+                >
+                  {topicLabel(topic.slug)}
+                </Chip>
+              ))}
+              {overflowTopics.length > 0 ? (
+                <select
+                  className={styles.overflowSelect}
+                  aria-label="More topics"
+                  value={
+                    overflowTopics.some((topic) => topic.slug === selectedTopic)
+                      ? selectedTopic
+                      : ""
+                  }
+                  onChange={(event) => update({ topic: event.target.value })}
+                >
+                  <option value="">More topics…</option>
+                  {overflowTopics.map((topic) => (
+                    <option key={topic.slug} value={topic.slug}>
+                      {topicLabel(topic.slug)} ({topic.clip_count})
+                    </option>
+                  ))}
+                </select>
+              ) : null}
+            </div>
+          ) : null}
 
-        <div className={styles.field}>
-          <label className={styles.label} htmlFor="filter-creator">
-            Creator
-          </label>
-          <input
-            id="filter-creator"
-            className={styles.control}
-            type="text"
-            value={creator}
-            placeholder="e.g. chef"
-            onChange={(event) => setCreator(event.target.value)}
-            onBlur={() => update({ creator: creator.trim() })}
-          />
-        </div>
+          <div className={styles.facetRow} role="group" aria-label="Platform and popularity">
+            <span className={styles.facetLabel}>
+              <Icon icon={Icons.filter} size="xs" />
+              Filter
+            </span>
+            {PLATFORMS.map(([value, label]) => (
+              <Chip
+                key={value}
+                selected={params.get("platform") === value}
+                onToggle={() => toggle("platform", value)}
+              >
+                {label}
+              </Chip>
+            ))}
+            {MIN_LIKES.map(([value, label]) => (
+              <Chip
+                key={value}
+                icon={Icons.favorite}
+                selected={params.get("min_likes") === value}
+                onToggle={() => toggle("min_likes", value)}
+              >
+                {label}
+              </Chip>
+            ))}
+            <label className={styles.creatorField}>
+              <span className="visually-hidden">Creator</span>
+              <Icon icon={Icons.search} size="xs" />
+              <input
+                className={styles.creatorInput}
+                type="text"
+                value={creator}
+                placeholder="Creator…"
+                onChange={(event) => setCreator(event.target.value)}
+                onBlur={() => update({ creator: creator.trim() })}
+              />
+            </label>
+            {/* Submitting the form applies the creator field for keyboard users. */}
+            <button type="submit" className="visually-hidden">
+              Apply creator filter
+            </button>
+          </div>
+        </form>
 
-        <div className={styles.actions}>
-          <Button type="submit">Apply</Button>
-        </div>
-      </form>
+        {active.length > 0 ? (
+          <div className={styles.activeRow} aria-label="Active filters">
+            <span className={styles.facetLabel}>Active</span>
+            {active.map((filter) => (
+              <Chip
+                key={filter.field}
+                selected
+                onRemove={() => {
+                  update({ [filter.field]: "" });
+                  if (filter.field === "creator") {
+                    setCreator("");
+                  }
+                }}
+                removeLabel={`Remove ${filter.label} filter`}
+              >
+                {filter.label}
+              </Chip>
+            ))}
+            <Button variant="ghost" size="sm" icon={Icons.close} onClick={clearAll}>
+              Clear all
+            </Button>
+          </div>
+        ) : null}
+      </div>
 
       <ClipListView
         title="Results"
         query={query}
+        emptyIcon={Icons.filter}
         emptyTitle="No matches"
-        emptyDescription="Try relaxing a filter to see more clips."
+        emptyDescription="Nothing in your library matches every one of these filters."
+        emptyAction={
+          active.length > 0 ? (
+            <Button variant="primary" icon={Icons.close} onClick={clearAll}>
+              Clear all filters
+            </Button>
+          ) : undefined
+        }
         queueContext={{ from: "explore", params }}
       />
     </section>
