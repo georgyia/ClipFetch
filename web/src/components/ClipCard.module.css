@@ -1,4 +1,5 @@
 .card {
+  position: relative;
   display: flex;
   flex-direction: column;
   gap: var(--space-3);
@@ -10,7 +11,26 @@
   contain-intrinsic-size: auto 320px;
 }
 
-.card:focus-visible {
+/*
+ * The link is a bare <a> stretched over the whole card by ::after, so the card can also host real
+ * buttons — a <button> inside an <a> is invalid HTML and unreachable by keyboard. The controls sit
+ * at a higher z-index than the stretched hit area, so they receive their own clicks.
+ */
+.link {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  border-radius: var(--radius-card);
+}
+
+.link::after {
+  content: "";
+  position: absolute;
+  /* Extends past the poster to cover the caption block below it. */
+  inset: 0 0 -60px;
+}
+
+.link:focus-visible {
   outline: var(--ring-width) solid var(--color-focus);
   outline-offset: 3px;
 }
@@ -28,7 +48,7 @@
 }
 
 .card:hover .posterWrap,
-.card:focus-visible .posterWrap {
+.card:focus-within .posterWrap {
   transform: translateY(calc(-6px * var(--motion-scale)))
     scale(calc(1 + 0.035 * var(--motion-scale)));
   box-shadow: var(--shadow-card-hover);
@@ -85,7 +105,7 @@
 }
 
 .card:hover .hoverScrim,
-.card:focus-visible .hoverScrim {
+.card:focus-within .hoverScrim {
   opacity: 1;
 }
 
@@ -118,7 +138,7 @@
 }
 
 .card:hover .playBadge,
-.card:focus-visible .playBadge {
+.card:focus-within .playBadge {
   opacity: 1;
   transform: translate(-50%, -50%) scale(1);
 }
@@ -219,17 +239,110 @@
   }
 
   .card:hover .posterWrap,
-  .card:focus-visible .posterWrap,
+  .card:focus-within .posterWrap,
   .card:hover .poster {
     transform: none;
   }
 
   .card:hover .playBadge,
-  .card:focus-visible .playBadge {
+  .card:focus-within .playBadge {
     transform: translate(-50%, -50%);
   }
 
   .preview {
     animation: none;
   }
+}
+
+/* ---------------------------------------------------- selection & actions */
+
+/*
+ * Card controls. Hidden until hover or keyboard focus so a browsing grid stays calm, but always
+ * present in the DOM — revealing them only on hover would make them unreachable on touch, so they
+ * also stay visible whenever the card is selected.
+ */
+.cardActions,
+.selectBox {
+  position: absolute;
+  z-index: 2;
+  opacity: 0;
+  transition: opacity var(--duration-fast) var(--ease-standard);
+}
+
+.cardActions {
+  top: var(--space-3);
+  right: var(--space-3);
+}
+
+.card:hover .cardActions,
+.card:focus-within .cardActions,
+.card:hover .selectBox,
+.card:focus-within .selectBox,
+.selected .selectBox {
+  opacity: 1;
+}
+
+/* Touch devices cannot hover, so the controls are simply always visible there. */
+@media (hover: none) {
+  .cardActions,
+  .selectBox {
+    opacity: 1;
+  }
+}
+
+.cardActions button {
+  /* Compact glass treatment, so the control reads over any poster. */
+  width: 36px;
+  min-height: 36px;
+  background: var(--surface-glass-strong);
+  backdrop-filter: var(--glass-blur);
+  border-color: var(--glass-border-strong);
+  box-shadow: var(--elevation-3);
+}
+
+.selectBox {
+  top: var(--space-3);
+  left: var(--space-3);
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+}
+
+.selectInput {
+  position: absolute;
+  inset: 0;
+  margin: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.selectMark {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border-radius: var(--radius-small);
+  border: 2px solid var(--glass-border-strong);
+  background: var(--surface-glass-strong);
+  backdrop-filter: var(--glass-blur);
+  color: transparent;
+  transition: background-color var(--duration-fast) var(--ease-standard), border-color
+    var(--duration-fast) var(--ease-standard), color var(--duration-fast) var(--ease-standard);
+}
+
+.selectBox:has(.selectInput:checked) .selectMark {
+  background: var(--color-accent);
+  border-color: var(--color-accent);
+  color: var(--color-text);
+}
+
+.selectBox:has(.selectInput:focus-visible) .selectMark {
+  outline: var(--ring-width) solid var(--color-focus);
+  outline-offset: 2px;
+}
+
+/* A selected card keeps a persistent accent ring, so the selection survives losing hover. */
+.selected .posterWrap {
+  border-color: var(--color-accent);
+  box-shadow: var(--elevation-3), 0 0 0 2px var(--color-accent);
 }

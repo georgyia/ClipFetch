@@ -1,3 +1,4 @@
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { fireEvent, render, screen } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { expect, test, vi } from "vitest";
@@ -10,11 +11,15 @@ const ITEMS = [
   makeClip({ id: "C", caption: "Gamma" }),
 ];
 
+/** Cards carry a FavoriteButton, so even an isolated rail needs a query client. */
 function renderRail() {
+  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
-    <MemoryRouter>
-      <ClipRail title="Recently Added" items={ITEMS} seeAllTo="/library" />
-    </MemoryRouter>,
+    <QueryClientProvider client={queryClient}>
+      <MemoryRouter>
+        <ClipRail title="Recently Added" items={ITEMS} seeAllTo="/library" />
+      </MemoryRouter>
+    </QueryClientProvider>,
   );
 }
 

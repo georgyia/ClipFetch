@@ -1,5 +1,6 @@
 import type { ClipSummary } from "../api/types";
 import { useRevealOnScroll } from "../lib/useRevealOnScroll";
+import type { Selection } from "../lib/useSelection";
 import { ClipCard } from "./ClipCard";
 import styles from "./ClipGrid.module.css";
 import { VirtualClipGrid } from "./VirtualClipGrid";
@@ -8,6 +9,8 @@ export interface ClipGridProps {
   items: ClipSummary[];
   label: string;
   progressById?: Record<string, number>;
+  /** When provided and active, cards show selection checkboxes. */
+  selection?: Selection;
 }
 
 /**
@@ -26,11 +29,18 @@ const STAGGER_LIMIT = 12;
 const VIRTUALIZE_ABOVE = 60;
 
 /** Responsive, density-adaptive grid of clip cards for library, topic, and search views. */
-export function ClipGrid({ items, label, progressById }: ClipGridProps) {
+export function ClipGrid({ items, label, progressById, selection }: ClipGridProps) {
   const { ref, revealed } = useRevealOnScroll<HTMLUListElement>();
 
   if (items.length > VIRTUALIZE_ABOVE) {
-    return <VirtualClipGrid items={items} label={label} progressById={progressById} />;
+    return (
+      <VirtualClipGrid
+        items={items}
+        label={label}
+        progressById={progressById}
+        selection={selection}
+      />
+    );
   }
 
   return (
@@ -45,7 +55,13 @@ export function ClipGrid({ items, label, progressById }: ClipGridProps) {
               : undefined
           }
         >
-          <ClipCard clip={clip} progress={progressById?.[clip.id]} />
+          <ClipCard
+            clip={clip}
+            progress={progressById?.[clip.id]}
+            selectable={selection?.active}
+            selected={selection?.has(clip.id)}
+            onSelectChange={(next) => selection?.toggle(clip.id, next)}
+          />
         </li>
       ))}
     </ul>

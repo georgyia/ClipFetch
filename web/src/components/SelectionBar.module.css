@@ -1,0 +1,64 @@
+/*
+ * Pinned to the bottom of the viewport rather than sitting in the flow, so the actions stay
+ * reachable however far down a long grid the user has scrolled to make their selection.
+ */
+.bar {
+  position: fixed;
+  left: 50%;
+  bottom: calc(var(--space-6) + env(safe-area-inset-bottom));
+  z-index: 30;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: var(--space-5);
+  flex-wrap: wrap;
+  justify-content: center;
+  max-width: calc(100vw - var(--space-8));
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-pill);
+  background: var(--surface-glass-strong);
+  backdrop-filter: var(--glass-blur);
+  border: 1px solid var(--glass-border-strong);
+  box-shadow: var(--elevation-5);
+  animation: bar-in var(--duration-slow) var(--ease-emphasized);
+}
+
+@keyframes bar-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, 12px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateX(-50%);
+  }
+}
+
+.count {
+  margin: 0;
+  padding-left: var(--space-3);
+  color: var(--color-text);
+  font: var(--text-label);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+/* Clear of the mobile tab bar, which occupies the same corner of the screen. */
+@media (max-width: 767px) {
+  .bar {
+    bottom: calc(var(--space-12) + env(safe-area-inset-bottom));
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bar {
+    animation: none;
+  }
+}
