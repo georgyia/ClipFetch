@@ -21,6 +21,7 @@ history instead of an algorithmic feed.
 - [Getting around](#getting-around)
 - [Playback and keyboard shortcuts](#playback-and-keyboard-shortcuts)
 - [Downloads](#downloads)
+- [Accessibility](#accessibility)
 - [Privacy and local-first](#privacy-and-local-first)
 - [Troubleshooting](#troubleshooting)
 - [Data locations and migration](#data-locations-and-migration)
@@ -95,8 +96,41 @@ The primary navigation (a left rail on desktop, a bottom tab bar on mobile) has 
 | **Downloads** | Download/enrichment jobs with live progress, phases, retries, and failures. |
 | **Settings** | Capabilities, platform support, schema versions, job counts, and a redacted support bundle you can copy into a bug report. |
 
-Opening any clip shows its detail page — caption, author, metadata, an explainable quality tier, and
-"more like this" recommendations — with a play button into the vertical player.
+Opening any clip shows its detail page — an ambient backdrop built from the clip's own poster, the
+caption, author, metadata as chips, an explainable quality tier, and "more like this"
+recommendations — with a prominent **Play** into the vertical player. Playing from a clip's detail
+page seeds the queue with that clip's topic, so *next* continues along something related.
+
+### Jump anywhere with ⌘K
+
+Press **⌘K** (**Ctrl+K** on Windows and Linux), or click the search box in the header, to open the
+command palette. It searches every destination at once:
+
+- **routes** — Home, Explore, Search, Library, Downloads, Settings
+- **topics and collections** in your library, with clip counts
+- **actions** — add reels, add a library, connect an account, switch theme, show keyboard shortcuts
+- **clips** — up to five live matches as you type
+- **recent searches**, when the box is empty
+
+Arrow keys move the selection, `Enter` runs it, `Esc` closes. Anything the palette cannot match
+offers *Search for "…"* as a fallback, which opens the full search page.
+
+### Filtering in Explore
+
+Explore's facets are chips: sort, topic, platform, and minimum likes, plus a creator field. The bar
+stays pinned while results scroll, so you never have to scroll back up to change a filter. Whatever
+is currently narrowing the view appears as a row of **active filter** chips that clear individually,
+and **Clear all** resets the filters while keeping your chosen sort order.
+
+Every filter lives in the URL, so a filtered view is shareable and refresh-safe — and **Play all**
+or **Shuffle** turns that exact set into a player queue.
+
+### Choosing a theme
+
+Watch ships a refined dark theme and a light theme. **Settings → Appearance** offers *System*,
+*Light*, and *Dark*; you can also switch from the header or the command palette. *System* follows
+your operating system and updates live when it changes. Your choice is stored in the browser and
+applied before the first paint, so there is no flash of the wrong theme on load.
 
 ---
 
@@ -106,6 +140,15 @@ The player is built for vertical, short-form media: it fills the screen at 9:16,
 left off (Continue Watching), and moves quickly between clips. Playback position is saved per clip as
 you watch.
 
+**Anywhere in the app:**
+
+| Key | Action |
+|---|---|
+| `⌘K` / `Ctrl+K` | Open the command palette |
+| `?` | Show the keyboard-shortcuts sheet |
+
+**In the player:**
+
 | Key | Action |
 |---|---|
 | `Space` or `K` | Play / pause |
@@ -114,9 +157,24 @@ you watch.
 | `M` | Mute / unmute |
 | `N` | Next clip |
 | `P` | Previous clip |
-| `Esc` | Close the player / go back |
+| `S` | Toggle shuffle |
+| `Q` | Toggle the up-next queue |
+| `F` | Full screen |
+| `Esc` | Leave full screen, then close the player |
 
-Shortcuts are ignored while a text field is focused, and reduced-motion preferences are respected.
+Bare-key shortcuts are ignored while a text field is focused, so typing `?` into a search box types
+a question mark. `⌘K` is the exception — it works from inside a text field too, because a modifier
+chord is unambiguous.
+
+The control bar fades away while a clip is playing and returns the moment you move the pointer or
+press a key. It never hides while the video is paused, while the up-next queue is open, or while
+your focus is inside the controls — and it never hides at all if you have reduced motion enabled.
+
+The scrubber shows how much of the clip has buffered and, on hover, the exact time under the
+pointer. Up-next is a sheet with poster thumbnails you can jump straight to.
+
+Reduced-motion preferences are respected throughout: page transitions, card reveals, and the
+ambient glow behind the player are all disabled rather than merely shortened.
 
 **Posters.** A thumbnail is generated with `ffmpeg` for each clip as it downloads, when `ffmpeg` is
 on your `PATH`; without it, clips still play — they just show a placeholder instead of a poster.
@@ -146,6 +204,18 @@ step — retries, cancellation, and sanitized failure reasons).
 The worker starts and stops with the server, reaps stale job leases so a crash never strands a job,
 and only claims work when a source is configured (the real Instagram source by default, or the
 fake source under `--demo`).
+
+---
+
+## Accessibility
+
+Watch is built to WCAG 2.2 AA: full keyboard operation with visible focus, announced route changes,
+labelled controls, 44px targets, and both themes contrast-checked in the test suite. Reduced-motion
+preferences disable page transitions, card reveals, the player's ambient glow, and control
+auto-hide — rather than merely shortening them.
+
+The full picture, including verification and the gaps that are *not* claimed (no timed captions in
+the player yet), is in **[accessibility.md](accessibility.md)**.
 
 ---
 

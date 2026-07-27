@@ -297,12 +297,19 @@ and works without any cloud account.
 
 Design highlights from the blueprint:
 
-- **Reel-native player** — 9:16 media, captions, keyboard/gesture controls, and rapid next/previous navigation.
+- **Reel-native player** — 9:16 media, auto-hiding glass controls, a buffered scrubber with a hover time
+  preview, an ambient glow drawn from the clip's own poster, and rapid next/previous navigation.
 - **Editorial browsing** — Home rails such as Continue Watching, Recently Added, High-Quality Picks, and per-topic
   channels, deduplicated across rails.
+- **Keyboard-first** — a ⌘K command palette over routes, topics, collections, actions, and clips; a discoverable
+  shortcuts sheet behind `?`.
+- **Faceted discovery** — Explore's filters are chips in a pinned bar, with active filters shown as chips that
+  clear individually, all reflected in the URL so a view is shareable and becomes a player queue.
 - **Explainable quality** — a *measured* technical tier (resolution/bitrate/codec) kept separate from any
   recommendation score, so "high quality" always means something.
 - **Transparent jobs** — downloads and enrichment run in a worker with visible phases, failures, and retries.
+- **Dark and light** — both themes derived independently rather than inverted, applied before first paint so
+  there is no flash, with contrast asserted in the test suite.
 - **Accessibility as a release gate** — full keyboard operation, visible focus, reduced-motion support, and
   captions targeted at WCAG 2.2 AA.
 

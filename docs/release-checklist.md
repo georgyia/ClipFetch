@@ -41,6 +41,17 @@ Prove the wheel ships the UI bundle and serves it end to end (mirrors the CI `we
 
 - [ ] With a fresh venv: `npm --prefix web run build` → `pip install ".[web]"` (non-editable).
 - [ ] `python scripts/smoke_web.py` passes (SPA at `/`, deep-link fallback, API/health respond).
+- [ ] Interface spot-checks in a browser:
+      - [ ] Theme toggle (Settings → Appearance) switches System/Light/Dark, survives a reload, and
+            shows **no flash** of the wrong theme on load.
+      - [ ] `⌘K` / `Ctrl+K` opens the command palette; arrows move, `Enter` navigates, `Esc` closes
+            and returns focus to whatever opened it.
+      - [ ] Explore facet chips filter, active-filter chips clear individually, and **Clear all**
+            keeps the chosen sort.
+      - [ ] Player controls auto-hide during playback and stay put while paused.
+      - [ ] With OS reduced-motion enabled: no page transitions, no card reveal animation, no
+            ambient glow, and the controls do not auto-hide.
+      - [ ] Keyboard-only pass over Home → Explore → clip detail → player: focus is always visible.
 - [ ] Manually: `clipfetch web`, register + activate a small library, confirm Home rails, the player,
       seek/next/previous, and the Settings support bundle all work.
 - [ ] `clipfetch web --demo` processes a queued job to `succeeded` on the Downloads page.
