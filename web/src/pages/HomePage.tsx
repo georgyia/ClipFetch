@@ -1,10 +1,13 @@
+import { Link } from "react-router-dom";
 import { useBootstrap, useHome } from "../api/queries";
 import type { ClipSummary, Rail } from "../api/types";
+import { Button } from "../components/Button";
 import { ClipRail } from "../components/ClipRail";
 import { EmptyState } from "../components/EmptyState";
 import { ErrorState } from "../components/ErrorState";
 import { Hero } from "../components/Hero";
-import { LoadingState } from "../components/LoadingState";
+import { SkeletonHome } from "../components/Skeletons";
+import { Icons } from "../components/icons";
 
 function pickFeatured(rails: Rail[]): ClipSummary | null {
   for (const rail of rails) {
@@ -25,19 +28,30 @@ export function HomePage() {
   if (bootstrap.data && !bootstrap.data.active_library) {
     return (
       <EmptyState
+        icon={Icons.library}
         title="No active library"
-        description="Register and activate a library to start watching."
+        description="Register a folder of clips and activate it — Watch reads from a library on this machine."
+        action={
+          <Link to="/library">
+            <Button variant="primary" icon={Icons.folderOpen}>
+              Add a library
+            </Button>
+          </Link>
+        }
       />
     );
   }
   if (home.isLoading || bootstrap.isLoading) {
-    return <LoadingState label="Loading your library…" />;
+    // A layout-matched skeleton rather than a spinner, so nothing shifts when the rails arrive.
+    return <SkeletonHome />;
   }
   if (home.isError || !home.data) {
     return (
       <ErrorState
         title="Could not reach the ClipFetch Watch server"
-        description="Start the local server, then reload this page."
+        description="The local server may have stopped. Start it again, then retry."
+        onRetry={() => home.refetch()}
+        retrying={home.isFetching}
       />
     );
   }
@@ -46,9 +60,21 @@ export function HomePage() {
   if (rails.length === 0) {
     return (
       <EmptyState
+        icon={Icons.downloads}
         title="Your library is empty"
-        description="Download some clips with the ClipFetch CLI, then reload to see them here."
-      />
+        description="Download clips with the ClipFetch CLI, or queue them from Downloads — they'll show up here as rails."
+        action={
+          <Link to="/downloads">
+            <Button variant="primary" icon={Icons.downloads}>
+              Add reels
+            </Button>
+          </Link>
+        }
+      >
+        <p>
+          Already downloaded some? <Link to="/library">Rescan your library</Link> to pick them up.
+        </p>
+      </EmptyState>
     );
   }
 

@@ -5,8 +5,8 @@ import { Button } from "../components/Button";
 import { ClipRail } from "../components/ClipRail";
 import { ErrorState } from "../components/ErrorState";
 import { FavoriteButton } from "../components/FavoriteButton";
-import { LoadingState } from "../components/LoadingState";
 import { QualityBadge } from "../components/QualityBadge";
+import { SkeletonClipDetail } from "../components/Skeletons";
 import { TopicChip } from "../components/TopicChip";
 import { Icons } from "../components/icons";
 import { compactCount, formatBytes, formatDate, formatDuration } from "../lib/format";
@@ -49,7 +49,7 @@ export function ClipDetailPage() {
   const { data: clip, isLoading, isError } = useClipDetail(id);
 
   if (isLoading) {
-    return <LoadingState label="Loading clip…" />;
+    return <SkeletonClipDetail />;
   }
   if (isError || !clip) {
     return (

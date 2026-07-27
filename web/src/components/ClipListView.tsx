@@ -1,18 +1,24 @@
 import type { UseInfiniteQueryResult } from "@tanstack/react-query";
+import type { ReactNode } from "react";
 import type { ClipPage } from "../api/types";
 import type { QueueContext } from "../lib/queueSource";
 import { Button } from "./Button";
 import { ClipGrid } from "./ClipGrid";
+import styles from "./ClipListView.module.css";
 import { EmptyState } from "./EmptyState";
 import { ErrorState } from "./ErrorState";
-import { LoadingState } from "./LoadingState";
 import { PlayAll } from "./PlayAll";
+import { SkeletonGrid } from "./Skeletons";
+import { Icons, type LucideIcon } from "./icons";
 
 export interface ClipListViewProps {
   title: string;
   query: UseInfiniteQueryResult<{ pages: ClipPage[] }, unknown>;
   emptyTitle?: string;
   emptyDescription?: string;
+  emptyIcon?: LucideIcon;
+  /** A CTA for the zero-state — the one thing that would fill this view. */
+  emptyAction?: ReactNode;
   /** When set, a Play-all/Shuffle control opens the player with this list as the queue. */
   queueContext?: QueueContext;
 }
@@ -23,18 +29,31 @@ export function ClipListView({
   query,
   emptyTitle,
   emptyDescription,
+  emptyIcon,
+  emptyAction,
   queueContext,
 }: ClipListViewProps) {
-  const { data, isLoading, isError, hasNextPage, isFetchingNextPage, fetchNextPage } = query;
+  const {
+    data,
+    isLoading,
+    isError,
+    isFetching,
+    refetch,
+    hasNextPage,
+    isFetchingNextPage,
+    fetchNextPage,
+  } = query;
 
   if (isLoading) {
-    return <LoadingState label={`Loading ${title.toLowerCase()}…`} />;
+    return <SkeletonGrid label={`Loading ${title.toLowerCase()}`} />;
   }
   if (isError || !data) {
     return (
       <ErrorState
         title="Something went wrong"
-        description="This view could not be loaded. Try again."
+        description="This view could not be loaded. It is usually a dropped connection to the local server."
+        onRetry={() => refetch()}
+        retrying={isFetching}
       />
     );
   }
@@ -43,8 +62,10 @@ export function ClipListView({
   if (items.length === 0) {
     return (
       <EmptyState
+        icon={emptyIcon}
         title={emptyTitle ?? "Nothing here yet"}
         description={emptyDescription ?? "No clips match this view."}
+        action={emptyAction}
       />
     );
   }
@@ -52,25 +73,21 @@ export function ClipListView({
   const total = data.pages[0]?.total_matched ?? items.length;
   return (
     <div>
-      <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          gap: "var(--space-4)",
-          flexWrap: "wrap",
-        }}
-      >
-        <p aria-live="polite">
+      <div className={styles.toolbar}>
+        <p className={styles.count} aria-live="polite">
           Showing {items.length} of {total}
         </p>
         {queueContext ? <PlayAll items={items} context={queueContext} /> : null}
       </div>
       <ClipGrid items={items} label={title} />
       {hasNextPage ? (
-        <div style={{ display: "flex", justifyContent: "center", marginTop: "var(--space-8)" }}>
-          <Button onClick={() => fetchNextPage()} disabled={isFetchingNextPage}>
-            {isFetchingNextPage ? "Loading…" : "Load more"}
+        <div className={styles.more}>
+          <Button
+            icon={Icons.chevronDown}
+            loading={isFetchingNextPage}
+            onClick={() => fetchNextPage()}
+          >
+            Load more
           </Button>
         </div>
       ) : null}

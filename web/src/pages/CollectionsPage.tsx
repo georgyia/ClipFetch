@@ -12,7 +12,7 @@ import {
 import type { CollectionSummary } from "../api/types";
 import { Button } from "../components/Button";
 import { ErrorState } from "../components/ErrorState";
-import { LoadingState } from "../components/LoadingState";
+import { SkeletonList } from "../components/Skeletons";
 import { titleize } from "../lib/format";
 import styles from "./CollectionsPage.module.css";
 
@@ -86,10 +86,17 @@ export function CollectionsPage() {
   }
 
   if (collections.isLoading) {
-    return <LoadingState label="Loading collections…" />;
+    return <SkeletonList label="Loading collections" />;
   }
   if (collections.isError || !collections.data) {
-    return <ErrorState title="Something went wrong" description="Collections could not load." />;
+    return (
+      <ErrorState
+        title="Could not load collections"
+        description="The local server did not answer."
+        onRetry={() => collections.refetch()}
+        retrying={collections.isFetching}
+      />
+    );
   }
 
   const pending = create.isPending || update.isPending;

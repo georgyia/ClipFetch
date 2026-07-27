@@ -11,7 +11,7 @@ import {
 import { Button } from "../components/Button";
 import { DirectoryPicker } from "../components/DirectoryPicker";
 import { ErrorState } from "../components/ErrorState";
-import { LoadingState } from "../components/LoadingState";
+import { SkeletonList } from "../components/Skeletons";
 import { useToast } from "../components/Toast";
 import styles from "./LibraryPage.module.css";
 
@@ -67,7 +67,7 @@ export function LibraryPage() {
   }
 
   if (isLoading) {
-    return <LoadingState label="Loading libraries…" />;
+    return <SkeletonList label="Loading libraries" />;
   }
   if (isError || !data) {
     return (

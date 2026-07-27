@@ -1,5 +1,8 @@
+import { Link } from "react-router-dom";
 import { useClipList } from "../api/queries";
+import { Button } from "../components/Button";
 import { ClipListView } from "../components/ClipListView";
+import { Icons } from "../components/icons";
 
 // "See all" destination for the Recently Added rail: the whole library, newest first.
 export function RecentPage() {
@@ -17,8 +20,16 @@ export function RecentPage() {
       <ClipListView
         title="Recently Added"
         query={query}
+        emptyIcon={Icons.downloads}
         emptyTitle="Your library is empty"
-        emptyDescription="Download some clips with the ClipFetch CLI to see them here."
+        emptyDescription="Queue a download and the newest clips will land here first."
+        emptyAction={
+          <Link to="/downloads">
+            <Button variant="primary" icon={Icons.downloads}>
+              Add reels
+            </Button>
+          </Link>
+        }
         queueContext={{ from: "recent" }}
       />
     </section>
