@@ -55,3 +55,10 @@
   color: var(--color-success);
   font: var(--text-label);
 }
+
+.cardHint {
+  margin: 0 0 var(--space-5);
+  color: var(--color-text-muted);
+  font: var(--text-caption);
+  max-width: 44ch;
+}

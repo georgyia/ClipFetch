@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { render, screen, within } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import type { ReactElement } from "react";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
@@ -48,4 +48,17 @@ test("renders the primary navigation and brand", () => {
 test("prompts to activate a library when none is active", async () => {
   renderWithProviders(<App />);
   expect(await screen.findByText("No active library")).toBeInTheDocument();
+});
+
+test("the header is transparent at the top and condenses once the page scrolls", () => {
+  const { container } = renderWithProviders(<App />);
+  const header = container.querySelector("header");
+  expect(header).toHaveAttribute("data-condensed", "false");
+
+  // jsdom never scrolls on its own, so drive scrollY directly and fire the event the hook listens
+  // for — the assertion is about the hook's threshold logic, not about jsdom layout.
+  Object.defineProperty(window, "scrollY", { value: 120, writable: true, configurable: true });
+  fireEvent.scroll(window);
+
+  expect(header).toHaveAttribute("data-condensed", "true");
 });

@@ -1,9 +1,34 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" data-theme="dark">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <title>ClipFetch Watch</title>
+    <!--
+      Theme bootstrap. Runs before first paint so a light-theme user never sees a dark flash (and
+      vice versa). Kept inline and dependency-free on purpose: an external module would be fetched
+      after the first paint, which is exactly the flash this prevents.
+
+      The storage key must stay in step with THEME_STORAGE_KEY in src/lib/theme.tsx.
+    -->
+    <script>
+      (function () {
+        try {
+          var choice = localStorage.getItem("clipfetch-theme") || "system";
+          var dark =
+            choice === "dark" ||
+            (choice !== "light" &&
+              window.matchMedia &&
+              window.matchMedia("(prefers-color-scheme: dark)").matches);
+          var theme = dark ? "dark" : "light";
+          document.documentElement.dataset.theme = theme;
+          document.documentElement.style.colorScheme = theme;
+        } catch (error) {
+          // Storage blocked (private mode, locked-down browser): keep the dark default already
+          // on <html> rather than failing to render.
+        }
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>

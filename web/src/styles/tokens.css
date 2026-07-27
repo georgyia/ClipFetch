@@ -22,6 +22,11 @@
  *   3  cards on hover, popovers, the condensed header
  *   4  dialogs, sheets, the command palette
  *   5  the player control bar and anything floating over full-bleed media
+ *
+ * Theming: dark is the default and lives on :root, so the app renders correctly even before the
+ * bootstrap script in index.html runs. [data-theme="light"] overrides only what must change — the
+ * light block near the bottom of this file. Scrims that sit over *video* stay dark in both themes;
+ * they are contrast devices for the media, not surfaces of the page.
  */
 
 :root {
@@ -213,6 +218,79 @@
     ), radial-gradient(60rem 36rem at 88% 4%, rgb(139 92 246 / 8%), transparent 62%);
 }
 
+/* ============================================================== Light theme */
+
+/*
+ * Light is a genuine re-derivation, not an inversion. Three things change character:
+ *
+ *   Accent   coral at #ff4d67 is only ~3:1 on white, so light uses a deepened coral (#d3253f)
+ *            that clears AA for text and small icons. The gradient keeps the same hue journey.
+ *   Shadows  become cool grey at low alpha — on a light page, depth comes from a soft, wide
+ *            ambient shadow, not from the near-opaque contact shadows that work on near-black.
+ *   Borders  do more work than shadows do: light surfaces separate by edge, dark ones by lift.
+ */
+:root[data-theme="light"] {
+  color-scheme: light;
+
+  --color-bg: #fbfbfd;
+  --color-bg-subtle: #f3f4f8;
+  --color-surface: #fff;
+  --color-surface-raised: #fff;
+  --color-surface-hover: #eef0f5;
+  --color-surface-sunken: #e9ebf1;
+  --color-border: #dcdfe8;
+  --color-border-subtle: #e8eaf1;
+  --color-border-strong: #bcc2d0;
+
+  --color-text: #0e1116;
+  --color-text-secondary: #48505f;
+  --color-text-muted: #6a7280;
+  --color-text-inverse: #fff;
+
+  --color-accent: #d3253f;
+  --color-accent-hover: #b81c34;
+  --color-accent-pressed: #9d1429;
+  --color-accent-violet: #6d28d9;
+  --color-accent-violet-hover: #5b21b6;
+  --color-success: #0f766e;
+  --color-warning: #a16207;
+  --color-danger: #be123c;
+  --color-info: #1d4ed8;
+  --color-focus: #0369a1;
+
+  --color-accent-wash: rgb(211 37 63 / 10%);
+  --color-accent-wash-strong: rgb(211 37 63 / 18%);
+  --color-violet-wash: rgb(109 40 217 / 12%);
+
+  /* Overlays behind dialogs stay dark — a light scrim would not read as "behind". */
+  --overlay-scrim: rgb(15 18 26 / 45%);
+  --overlay-scrim-soft: rgb(15 18 26 / 25%);
+
+  --elevation-1: 0 1px 2px -1px rgb(24 30 46 / 8%), 0 2px 6px -2px rgb(24 30 46 / 6%);
+  --elevation-2: 0 2px 4px -2px rgb(24 30 46 / 9%), 0 6px 16px -4px rgb(24 30 46 / 8%);
+  --elevation-3: 0 4px 8px -3px rgb(24 30 46 / 10%), 0 14px 32px -8px rgb(24 30 46 / 10%);
+  --elevation-4: 0 8px 16px -6px rgb(24 30 46 / 12%), 0 28px 60px -14px rgb(24 30 46 / 14%);
+  --elevation-5: 0 12px 24px -8px rgb(24 30 46 / 14%), 0 44px 88px -20px rgb(24 30 46 / 18%);
+
+  --shadow-card-hover: var(--elevation-3), 0 0 0 1px rgb(24 30 46 / 6%), 0 24px 56px -20px
+    rgb(211 37 63 / 22%);
+  --accent-glow: 0 0 28px -10px rgb(211 37 63 / 40%);
+  --accent-glow-strong: 0 0 44px -8px rgb(211 37 63 / 52%);
+  --shadow-raised: var(--elevation-2);
+
+  --surface-glass: rgb(255 255 255 / 96%);
+  --surface-glass-strong: rgb(251 251 253 / 98%);
+  --glass-border: rgb(16 22 38 / 8%);
+  --glass-border-strong: rgb(16 22 38 / 14%);
+
+  --gradient-accent: linear-gradient(120deg, var(--color-accent), var(--color-accent-violet));
+  --gradient-accent-soft: linear-gradient(120deg, rgb(211 37 63 / 14%), rgb(109 40 217 / 14%));
+  --gradient-fade-right: linear-gradient(90deg, rgb(251 251 253 / 0%), var(--color-bg));
+  --gradient-fade-left: linear-gradient(270deg, rgb(251 251 253 / 0%), var(--color-bg));
+  --gradient-ambient: radial-gradient(70rem 40rem at 12% -10%, rgb(211 37 63 / 7%), transparent 60%),
+    radial-gradient(60rem 36rem at 88% 4%, rgb(109 40 217 / 6%), transparent 62%);
+}
+
 /*
  * Progressive enhancement: only browsers that can actually blur get the transparent chrome.
  * Everywhere else --surface-glass stays the opaque value defined above.
@@ -222,6 +300,12 @@
     --surface-glass: rgb(13 16 21 / 68%);
     --surface-glass-strong: rgb(8 10 14 / 82%);
     --glass-blur: saturate(160%) blur(20px);
+  }
+
+  :root[data-theme="light"] {
+    --surface-glass: rgb(255 255 255 / 72%);
+    --surface-glass-strong: rgb(251 251 253 / 86%);
+    --glass-blur: saturate(150%) blur(20px);
   }
 }
 
