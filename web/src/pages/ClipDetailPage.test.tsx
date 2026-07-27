@@ -65,15 +65,64 @@ function renderDetail() {
   );
 }
 
-test("shows metadata, a watch link, and technical details", async () => {
+test("shows metadata, a play link, and technical details", async () => {
   renderDetail();
   expect(await screen.findByRole("heading", { name: "One-pan pasta" })).toBeInTheDocument();
-  expect(screen.getByRole("link", { name: /Watch/ })).toHaveAttribute("href", "/watch/IG_COOK1");
   expect(screen.getByText("4.2 MB")).toBeInTheDocument();
   expect(screen.getByText("ready")).toBeInTheDocument();
   // Probed technical quality tier and resolution.
   expect(screen.getByText("Full HD")).toBeInTheDocument();
   expect(screen.getByText(/1080×1920/)).toBeInTheDocument();
+});
+
+test("Play carries queue context so next continues along the clip's topic", async () => {
+  renderDetail();
+  const play = await screen.findByRole("link", { name: /Play/ });
+  const href = play.getAttribute("href") ?? "";
+  expect(href).toContain("/watch/IG_COOK1");
+  // The clip's first topic seeds the queue, rather than falling back to global-recent.
+  expect(href).toContain("from=topic");
+  expect(href).toContain("key=cooking");
+});
+
+test("falls back to the recent queue when a clip has no topics", async () => {
+  const untagged = { ...DETAIL, topics: [] };
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(
+      async (input: RequestInfo | URL) =>
+        new Response(JSON.stringify(String(input).includes("/related") ? RELATED : untagged), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        }),
+    ),
+  );
+  renderDetail();
+  const play = await screen.findByRole("link", { name: /Play/ });
+  expect(play.getAttribute("href")).toContain("from=recent");
+});
+
+test("collapses a long caption behind a Show more toggle", async () => {
+  const long = { ...DETAIL, caption: "x".repeat(500) };
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(
+      async (input: RequestInfo | URL) =>
+        new Response(JSON.stringify(String(input).includes("/related") ? RELATED : long), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        }),
+    ),
+  );
+  renderDetail();
+  const toggle = await screen.findByRole("button", { name: "Show more" });
+  expect(toggle).toHaveAttribute("aria-expanded", "false");
+
+  toggle.click();
+  expect(await screen.findByRole("button", { name: "Show less" })).toHaveAttribute(
+    "aria-expanded",
+    "true",
+  );
 });
 
 test("shows a related rail excluding the current clip", async () => {

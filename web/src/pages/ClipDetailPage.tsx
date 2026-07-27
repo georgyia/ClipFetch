@@ -1,31 +1,81 @@
+import { useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { useClipDetail, useRelated } from "../api/queries";
 import { type ClipDetail, posterUrl } from "../api/types";
+import { Badge } from "../components/Badge";
 import { Button } from "../components/Button";
+import { Chip } from "../components/Chip";
 import { ClipRail } from "../components/ClipRail";
 import { ErrorState } from "../components/ErrorState";
 import { FavoriteButton } from "../components/FavoriteButton";
+import { Icon } from "../components/Icon";
 import { QualityBadge } from "../components/QualityBadge";
 import { SkeletonClipDetail } from "../components/Skeletons";
 import { TopicChip } from "../components/TopicChip";
-import { Icons } from "../components/icons";
+import { Icons, type LucideIcon } from "../components/icons";
 import { compactCount, formatBytes, formatDate, formatDuration } from "../lib/format";
+import { watchLink } from "../lib/queueSource";
 import styles from "./ClipDetailPage.module.css";
 
-function stat(label: string, value: string): { label: string; value: string } | null {
-  return value ? { label, value } : null;
+/** Long captions collapse to this many characters before a "Show more" appears. */
+const CAPTION_CLAMP = 320;
+
+interface Stat {
+  key: string;
+  icon: LucideIcon;
+  value: string;
 }
 
-function statList(clip: ClipDetail) {
-  return [
-    stat("likes", compactCount(clip.likes) && `${compactCount(clip.likes)} likes`),
-    stat("views", compactCount(clip.views) && `${compactCount(clip.views)} views`),
-    stat(
-      "comments",
-      clip.comments_count != null ? `${compactCount(clip.comments_count)} comments` : "",
-    ),
-    stat("shares", clip.shares != null ? `${compactCount(clip.shares)} shares` : ""),
-  ].filter((item): item is { label: string; value: string } => item !== null);
+/** Engagement figures as icon chips. Anything the platform did not report is simply omitted. */
+function statList(clip: ClipDetail): Stat[] {
+  const stats: Stat[] = [];
+  const likes = compactCount(clip.likes);
+  if (likes) {
+    stats.push({ key: "likes", icon: Icons.favorite, value: likes });
+  }
+  const views = compactCount(clip.views);
+  if (views) {
+    stats.push({ key: "views", icon: Icons.views, value: views });
+  }
+  if (clip.comments_count != null) {
+    stats.push({
+      key: "comments",
+      icon: Icons.comments,
+      value: compactCount(clip.comments_count) ?? "0",
+    });
+  }
+  const duration = formatDuration(clip.duration_seconds);
+  if (duration) {
+    stats.push({ key: "duration", icon: Icons.recent, value: duration });
+  }
+  const published = formatDate(clip.published_at);
+  if (published) {
+    stats.push({ key: "published", icon: Icons.published, value: published });
+  }
+  return stats;
+}
+
+function Caption({ text }: { text: string }) {
+  const [expanded, setExpanded] = useState(false);
+  const isLong = text.length > CAPTION_CLAMP;
+  const shown = expanded || !isLong ? text : `${text.slice(0, CAPTION_CLAMP).trimEnd()}…`;
+
+  return (
+    <div className={styles.section}>
+      <h2 className={styles.sectionTitle}>Caption</h2>
+      <p className={styles.caption}>{shown}</p>
+      {isLong ? (
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => setExpanded((value) => !value)}
+          aria-expanded={expanded}
+        >
+          {expanded ? "Show less" : "Show more"}
+        </Button>
+      ) : null}
+    </div>
+  );
 }
 
 function RelatedRail({ clip }: { clip: ClipDetail }) {
@@ -42,11 +92,14 @@ function RelatedRail({ clip }: { clip: ClipDetail }) {
   );
 }
 
-// Full-page clip detail: metadata, caption, topics, technical details, enrichment status, source,
-// and related clips. Entry point to the vertical player.
+/**
+ * The clip's title page: an ambient backdrop built from its own poster, the crisp portrait media
+ * over it, a prominent Play, and metadata as chips — then caption, technical details, and a
+ * related rail below.
+ */
 export function ClipDetailPage() {
   const { id } = useParams();
-  const { data: clip, isLoading, isError } = useClipDetail(id);
+  const { data: clip, isLoading, isError, isFetching, refetch } = useClipDetail(id);
 
   if (isLoading) {
     return <SkeletonClipDetail />;
@@ -55,10 +108,14 @@ export function ClipDetailPage() {
     return (
       <ErrorState
         title="Clip not found"
-        description="This clip may have been removed from the library."
+        description="This clip may have been removed from the library, or the id in the link is stale."
+        onRetry={() => refetch()}
+        retrying={isFetching}
         action={
           <Link to="/">
-            <Button variant="secondary">Back to Home</Button>
+            <Button variant="secondary" icon={Icons.home}>
+              Back to Home
+            </Button>
           </Link>
         }
       />
@@ -66,64 +123,112 @@ export function ClipDetailPage() {
   }
 
   const title = clip.caption?.trim() || clip.author || "Untitled clip";
+  const stats = statList(clip);
+  /*
+   * Playing from the detail page seeds the queue with the clip's own topic, so pressing next
+   * continues along something related instead of dropping back to global-recent.
+   */
+  const playTo = clip.topics[0]
+    ? watchLink(clip.id, { from: "topic", key: clip.topics[0] })
+    : watchLink(clip.id, { from: "recent" });
+
   return (
-    <article>
+    <article className={styles.page}>
+      {/*
+        Ambient backdrop: the clip's own poster, blown up, blurred, and dimmed. Purely decorative,
+        and it sits under a scrim that keeps everything above it at AA contrast whatever the
+        poster happens to look like.
+      */}
+      <div className={styles.backdrop} aria-hidden="true">
+        <img className={styles.backdropImage} src={posterUrl(clip.id)} alt="" decoding="async" />
+        <div className={styles.backdropScrim} />
+      </div>
+
       <div className={styles.top}>
-        <img className={styles.poster} src={posterUrl(clip.id)} alt="" decoding="async" />
+        <div className={styles.posterFrame}>
+          <img className={styles.poster} src={posterUrl(clip.id)} alt="" decoding="async" />
+          {clip.available ? null : <span className={styles.unavailable}>Media unavailable</span>}
+        </div>
+
         <div className={styles.header}>
+          <div className={styles.badges}>
+            <Badge tone="neutral" icon={Icons.clip}>
+              {clip.platform}
+            </Badge>
+            <QualityBadge
+              tier={clip.media?.tier.slug ?? "unknown"}
+              label={clip.media?.tier.label}
+              reason={clip.media?.tier.reason}
+            />
+            {clip.has_transcript ? (
+              <Badge tone="info" icon={Icons.confirm}>
+                Transcript
+              </Badge>
+            ) : null}
+          </div>
+
           <h1 className={styles.title}>{title}</h1>
           {clip.author ? <p className={styles.byline}>@{clip.author}</p> : null}
-          <ul className={styles.stats}>
-            {statList(clip).map((item) => (
-              <li key={item.label}>{item.value}</li>
-            ))}
-          </ul>
+
+          {stats.length > 0 ? (
+            <ul className={styles.stats}>
+              {stats.map((item) => (
+                <li key={item.key} className={styles.stat}>
+                  <Icon icon={item.icon} size="sm" />
+                  {item.value}
+                </li>
+              ))}
+            </ul>
+          ) : null}
+
           <div className={styles.actions}>
             {clip.available ? (
-              <Link to={`/watch/${encodeURIComponent(clip.id)}`}>
-                <Button variant="primary" icon={Icons.play}>
-                  Watch
+              <Link to={playTo} className={styles.playLink}>
+                <Button variant="primary" size="lg" icon={Icons.play}>
+                  Play
                 </Button>
               </Link>
             ) : (
-              <Button variant="primary" disabled>
+              <Button variant="primary" size="lg" disabled>
                 Media unavailable
               </Button>
             )}
             <FavoriteButton clipId={clip.id} />
+            {clip.source_url ? (
+              <a
+                className={styles.sourceButton}
+                href={clip.source_url}
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                <Icon icon={Icons.openExternal} size="sm" />
+                View original
+              </a>
+            ) : null}
           </div>
-          {clip.topics.length > 0 ? (
+
+          {clip.topics.length > 0 || clip.hashtags.length > 0 ? (
             <div className={styles.chips}>
               {clip.topics.map((topic) => (
-                <Link key={topic} to={`/topics/${encodeURIComponent(topic)}`}>
-                  <TopicChip label={topic} />
-                </Link>
+                <TopicChip key={topic} label={topic} linkToTopic />
+              ))}
+              {clip.hashtags.slice(0, 6).map((tag) => (
+                <Chip key={tag} icon={Icons.topics}>
+                  {tag.replace(/^#/, "")}
+                </Chip>
               ))}
             </div>
           ) : null}
         </div>
       </div>
 
-      {clip.caption ? (
-        <div className={styles.section}>
-          <h2 className={styles.sectionTitle}>Caption</h2>
-          <p className={styles.caption}>{clip.caption}</p>
-        </div>
-      ) : null}
+      {clip.caption ? <Caption text={clip.caption} /> : null}
 
       <div className={styles.section}>
         <h2 className={styles.sectionTitle}>Details</h2>
         <dl className={styles.details}>
           <dt>Platform</dt>
           <dd>{clip.platform}</dd>
-          <dt>Quality</dt>
-          <dd>
-            <QualityBadge
-              tier={clip.media?.tier.slug ?? "unknown"}
-              label={clip.media?.tier.label}
-              reason={clip.media?.tier.reason}
-            />
-          </dd>
           {clip.media?.height ? (
             <>
               <dt>Resolution</dt>
@@ -157,21 +262,6 @@ export function ClipDetailPage() {
           <dd>{clip.has_transcript ? (clip.transcript_status ?? "available") : "not available"}</dd>
           <dt>Comments</dt>
           <dd>{clip.has_comments ? (clip.comment_status ?? "available") : "not available"}</dd>
-          {clip.source_url ? (
-            <>
-              <dt>Source</dt>
-              <dd>
-                <a
-                  className={styles.sourceLink}
-                  href={clip.source_url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                >
-                  View original
-                </a>
-              </dd>
-            </>
-          ) : null}
         </dl>
       </div>
 

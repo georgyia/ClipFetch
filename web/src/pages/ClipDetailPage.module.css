@@ -1,34 +1,124 @@
-.layout {
+.page {
+  position: relative;
+  /* The backdrop bleeds past the content gutters, so the article owns its own stacking context. */
+  isolation: isolate;
+}
+
+/* --------------------------------------------------------------- backdrop */
+
+/*
+ * The clip's own poster, blown up and blurred, filling the top of the page. Pulled outward with
+ * negative margins so it reaches the viewport edges even though the page content is inset, and
+ * pinned behind everything with a negative z-index inside .page's stacking context.
+ */
+.backdrop {
+  position: absolute;
+  inset: calc(-1 * var(--space-9)) calc(-1 * var(--space-9)) auto;
+  height: clamp(340px, 52vh, 560px);
+  z-index: -1;
+  overflow: hidden;
+  pointer-events: none;
+  border-bottom-left-radius: var(--radius-2xl);
+  border-bottom-right-radius: var(--radius-2xl);
+}
+
+.backdropImage {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  /* Scaled past 100% so the blur's soft edge never reveals the container behind it. */
+  transform: scale(1.15);
+  filter: blur(48px) saturate(140%);
+  opacity: 0.5;
+}
+
+/*
+ * The scrim is what makes the backdrop safe: it fades to the page background at the bottom and
+ * holds a floor of darkness at the top, so title and metadata clear AA over any poster at all.
+ */
+.backdropScrim {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+      180deg,
+      rgb(2 3 6 / 55%) 0%,
+      rgb(2 3 6 / 70%) 55%,
+      var(--color-bg) 100%
+    ), var(--gradient-accent-soft);
+}
+
+/* ------------------------------------------------------------------- top */
+
+.top {
   display: grid;
   gap: var(--space-8);
   grid-template-columns: 1fr;
-  max-width: 960px;
+  padding-top: var(--space-7);
+}
+
+.posterFrame {
+  position: relative;
+  width: 100%;
+  max-width: 300px;
+  aspect-ratio: 9 / 16;
+  border-radius: var(--radius-panel);
+  overflow: hidden;
+  border: 1px solid var(--glass-border-strong);
+  background: var(--color-surface);
+  box-shadow: var(--elevation-5);
 }
 
 .poster {
   width: 100%;
-  max-width: 280px;
-  aspect-ratio: 9 / 16;
+  height: 100%;
   object-fit: cover;
-  border-radius: var(--radius-card);
-  border: 1px solid var(--color-border-subtle);
-  background: var(--color-surface);
+  display: block;
+}
+
+.unavailable {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgb(2 3 6 / 62%);
+  color: var(--color-text);
+  font: var(--text-label);
 }
 
 .header {
   display: flex;
   flex-direction: column;
-  gap: var(--space-4);
+  align-items: flex-start;
+  gap: var(--space-5);
+  min-width: 0;
+}
+
+.badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
 }
 
 .title {
   margin: 0;
-  font: 700 26px / 30px var(--font-sans);
+  font: var(--text-title);
+  letter-spacing: var(--tracking-title);
+  text-wrap: balance;
+  /* A title over media needs a shadow, not just a scrim, to stay crisp at large sizes. */
+  text-shadow: 0 2px 20px rgb(0 0 0 / 45%);
+  /* Long captions double as titles here; cap them rather than letting one fill the screen. */
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }
 
 .byline {
   margin: 0;
   color: var(--color-text-secondary);
+  font: var(--text-subheading);
 }
 
 .stats {
@@ -42,38 +132,81 @@
   font: var(--text-label);
 }
 
+.stat {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-variant-numeric: tabular-nums;
+}
+
 .actions {
   display: flex;
-  gap: var(--space-3);
+  gap: var(--space-4);
   flex-wrap: wrap;
+  align-items: center;
+}
+
+.playLink {
+  text-decoration: none;
+  border-radius: var(--radius-control);
+}
+
+.sourceButton {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-height: var(--hit-target);
+  padding: 0 var(--space-6);
+  border-radius: var(--radius-control);
+  border: 1px solid var(--color-border);
+  background: color-mix(in srgb, var(--color-surface-raised) 55%, transparent);
+  color: var(--color-text-secondary);
+  font: var(--text-label);
+  text-decoration: none;
+  transition: background-color var(--duration-fast) var(--ease-standard), color var(--duration-fast)
+    var(--ease-standard);
+}
+
+.sourceButton:hover {
+  background: var(--color-surface-raised);
+  color: var(--color-text);
 }
 
 .chips {
   display: flex;
   flex-wrap: wrap;
-  gap: var(--space-2);
+  gap: var(--space-3);
 }
 
-.caption {
-  margin: 0;
-  color: var(--color-text);
-  white-space: pre-wrap;
-}
+/* --------------------------------------------------------------- sections */
 
 .section {
-  margin-top: var(--space-8);
+  margin-top: var(--space-10);
 }
 
 .sectionTitle {
-  margin: 0 0 var(--space-4);
-  font: 650 18px / 22px var(--font-sans);
+  margin: 0 0 var(--space-5);
+  font: var(--text-heading);
+  letter-spacing: var(--tracking-heading);
+}
+
+.caption {
+  margin: 0 0 var(--space-3);
+  max-width: 70ch;
+  color: var(--color-text-secondary);
+  white-space: pre-wrap;
+  text-wrap: pretty;
 }
 
 .details {
   display: grid;
   grid-template-columns: max-content 1fr;
-  gap: var(--space-2) var(--space-6);
+  gap: var(--space-3) var(--space-7);
   margin: 0;
+  padding: var(--space-6);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-panel);
+  background: color-mix(in srgb, var(--color-surface) 70%, transparent);
 }
 
 .details dt {
@@ -84,17 +217,19 @@
 .details dd {
   margin: 0;
   color: var(--color-text);
-}
-
-.sourceLink {
-  color: var(--color-info);
+  font-variant-numeric: tabular-nums;
 }
 
 @media (min-width: 768px) {
   .top {
-    display: grid;
-    grid-template-columns: 280px 1fr;
-    gap: var(--space-8);
-    align-items: start;
+    grid-template-columns: 300px 1fr;
+    align-items: end;
+    gap: var(--space-9);
+    /* Drops the pair far enough down that the backdrop reads as sky behind them. */
+    padding-top: var(--space-10);
+  }
+
+  .details {
+    grid-template-columns: max-content 1fr max-content 1fr;
   }
 }
