@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import type { ClipSummary } from "../api/types";
 import { useRevealOnScroll } from "../lib/useRevealOnScroll";
 import type { Selection } from "../lib/useSelection";
@@ -11,6 +12,8 @@ export interface ClipGridProps {
   progressById?: Record<string, number>;
   /** When provided and active, cards show selection checkboxes. */
   selection?: Selection;
+  /** A context-specific control for each card, e.g. "remove from this collection". */
+  cardAction?: (clip: ClipSummary) => ReactNode;
 }
 
 /**
@@ -29,7 +32,7 @@ const STAGGER_LIMIT = 12;
 const VIRTUALIZE_ABOVE = 60;
 
 /** Responsive, density-adaptive grid of clip cards for library, topic, and search views. */
-export function ClipGrid({ items, label, progressById, selection }: ClipGridProps) {
+export function ClipGrid({ items, label, progressById, selection, cardAction }: ClipGridProps) {
   const { ref, revealed } = useRevealOnScroll<HTMLUListElement>();
 
   if (items.length > VIRTUALIZE_ABOVE) {
@@ -39,6 +42,7 @@ export function ClipGrid({ items, label, progressById, selection }: ClipGridProp
         label={label}
         progressById={progressById}
         selection={selection}
+        cardAction={cardAction}
       />
     );
   }
@@ -61,6 +65,7 @@ export function ClipGrid({ items, label, progressById, selection }: ClipGridProp
             selectable={selection?.active}
             selected={selection?.has(clip.id)}
             onSelectChange={(next) => selection?.toggle(clip.id, next)}
+            action={cardAction?.(clip)}
           />
         </li>
       ))}

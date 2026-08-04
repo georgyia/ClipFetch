@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import asdict, dataclass, replace
 from datetime import date, datetime
 from decimal import Decimal, InvalidOperation
@@ -84,10 +85,33 @@ def query_library(
     limit: int | None = None,
     offset: int = 0,
 ) -> QueryResult:
-    """Query a catalog with stable ordering and visible exclusion accounting."""
-    filters = filters or ClipFilter()
+    """Query a catalog with stable ordering and visible exclusion accounting.
+
+    ``filters=None`` means *no filter*, so everything matches. A selection that should match
+    nothing by query alone is expressed with :func:`query_selection` instead.
+    """
+    return query_selection(root, filters or ClipFilter(), sort=sort, limit=limit, offset=offset)
+
+
+def query_selection(
+    root: Path,
+    filters: ClipFilter | None,
+    pinned_ids: Sequence[str] = (),
+    *,
+    sort: str = "date",
+    limit: int | None = None,
+    offset: int = 0,
+) -> QueryResult:
+    """Query the union of what ``filters`` matches and the clips named by ``pinned_ids``.
+
+    Unlike :func:`query_library`, ``filters=None`` here means the selection has no query at all —
+    only the pinned ids are members. Pinned clips bypass every filter dimension, including the
+    availability check: a clip someone pinned by hand should still be listed (as unavailable) when
+    its file goes missing, rather than silently disappearing from the collection they built.
+    """
     if not root.is_dir():
         raise CatalogError(f"library directory does not exist: {root.resolve()}")
+    pinned = set(pinned_ids)
     with Catalog.open(root) as catalog:
         records = [_refresh_presence(root, record) for record in catalog.all()]
         # One query for all topic assignments instead of one per record (N+1) — matters at scale.
@@ -95,6 +119,11 @@ def query_library(
     matched: list[CatalogRecord] = []
     unknown_count = 0
     for record in records:
+        if record.clip_id in pinned:
+            matched.append(record)
+            continue
+        if filters is None:
+            continue
         is_match, unknown = matches_filter(
             record, filters, assigned_topics.get((record.platform, record.clip_id), ())
         )

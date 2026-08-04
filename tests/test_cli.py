@@ -367,6 +367,54 @@ def test_collection_cli_save_show_export_and_filtered_watch(tmp_path, capsys, mo
     assert captured == [video]
 
 
+def test_collection_cli_manual_membership(tmp_path, capsys, monkeypatch):
+    for clip_id, likes in (("ABC", 2_000_000), ("QUIET", 10)):
+        video = tmp_path / f"reel_001_{clip_id}.mp4"
+        video.write_bytes(b"video")
+        video.with_suffix(".json").write_text(
+            json.dumps({"platform": "instagram", "id": clip_id, "likes": likes}),
+            encoding="utf-8",
+        )
+    assert main(["library", "index", str(tmp_path)]) == 0
+
+    # --manual saves a collection with no query, so it starts empty rather than matching all.
+    assert main(["library", "collection", "save", str(tmp_path), "keepers", "--manual"]) == 0
+    capsys.readouterr()
+    assert main(["library", "collection", "show", str(tmp_path), "keepers"]) == 0
+    assert "0 current member(s)" in capsys.readouterr().out
+
+    assert main(
+        ["library", "collection", "add", str(tmp_path), "keepers", "--clip", "QUIET"]
+    ) == 0
+    assert "pins 1 clip(s)" in capsys.readouterr().out
+    assert main(["library", "collection", "add", str(tmp_path), "keepers", "--clip", "GHOST"]) == 1
+
+    capsys.readouterr()
+    assert main(
+        ["library", "export", str(tmp_path), "--collection", "keepers", "--format", "m3u"]
+    ) == 0
+    assert capsys.readouterr().out == "#EXTM3U\nreel_001_QUIET.mp4\n"
+
+    captured = []
+
+    def fake_watch(directory, console, **kwargs):
+        captured.extend(kwargs["videos"])
+        return 0
+
+    from clipfetch import watcher
+
+    monkeypatch.setattr(watcher, "watch", fake_watch)
+    assert main(["watch", str(tmp_path), "--collection", "keepers"]) == 0
+    assert captured == [tmp_path / "reel_001_QUIET.mp4"]
+
+    assert main(
+        ["library", "collection", "remove", str(tmp_path), "keepers", "--clip", "QUIET"]
+    ) == 0
+    capsys.readouterr()
+    assert main(["library", "collection", "show", str(tmp_path), "keepers"]) == 0
+    assert "0 current member(s)" in capsys.readouterr().out
+
+
 def test_transcript_enrichment_cli_with_fake_backend(tmp_path, capsys, monkeypatch):
     video = tmp_path / "reel_001_ABC.mp4"
     video.write_bytes(b"video")

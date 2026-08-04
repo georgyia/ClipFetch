@@ -1,0 +1,85 @@
+.list {
+  list-style: none;
+  margin: 0 0 var(--space-5);
+  padding: 0;
+  display: grid;
+  gap: var(--space-2);
+  /* The dialog must not grow past the viewport when a library has many collections. */
+  max-height: min(320px, 45vh);
+  overflow-y: auto;
+}
+
+.item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-card);
+}
+
+.name {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex: 1;
+  min-width: 0;
+  font: 600 14px / 18px var(--font-sans);
+  color: var(--color-text);
+  overflow-wrap: anywhere;
+}
+
+.count {
+  color: var(--color-text-muted);
+  font: var(--text-label);
+  font-variant-numeric: tabular-nums;
+}
+
+.form {
+  display: grid;
+  gap: var(--space-2);
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--color-border-subtle);
+}
+
+.row {
+  display: flex;
+  gap: var(--space-3);
+  align-items: center;
+}
+
+.label {
+  font: var(--text-label);
+  color: var(--color-text-muted);
+}
+
+.control {
+  flex: 1;
+  min-width: 0;
+  min-height: 40px;
+  padding: 0 var(--space-4);
+  border-radius: var(--radius-control);
+  border: 1px solid var(--color-border);
+  background: var(--color-surface-raised);
+  color: var(--color-text);
+  font: var(--text-label);
+}
+
+.hint {
+  margin: 0;
+  color: var(--color-text-muted);
+  font: var(--text-label);
+}
+
+.error {
+  margin: var(--space-3) 0 0;
+  color: var(--color-danger);
+  font: var(--text-label);
+}
+
+.actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: var(--space-5);
+}

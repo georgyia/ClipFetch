@@ -1,9 +1,9 @@
-"""Collection endpoints: list, inspect, browse, and manage saved dynamic collections.
+"""Collection endpoints: list, inspect, browse, and manage saved collections.
 
-Collections are stored filter definitions, never materialized clip lists; mutations reuse the same
-validators as the CLI. FastAPI evaluates these route signatures at runtime, so this module
-intentionally does not use ``from __future__ import annotations`` and uses ``Optional[...]`` for
-Python 3.9 compatibility.
+A collection is a saved filter definition, an explicit list of pinned clips, or both — its clips
+are the union. Mutations reuse the same validators as the CLI. FastAPI evaluates these route
+signatures at runtime, so this module intentionally does not use ``from __future__ import
+annotations`` and uses ``Optional[...]`` for Python 3.9 compatibility.
 """
 
 from datetime import date
@@ -14,10 +14,14 @@ from pydantic import BaseModel, Field
 
 from clipfetch.api.dependencies import ActiveLibraryRootDep
 from clipfetch.api.errors import ApiException
+from clipfetch.catalog import CatalogError
 from clipfetch.collections import CollectionError
 from clipfetch.library import ClipFilter
 from clipfetch.services import collection_service
 from clipfetch.services.catalog_service import InvalidCursorError
+
+#: A bulk pin is a person selecting clips in a grid, so this is generous but not unbounded.
+MAX_CLIPS_PER_REQUEST = 500
 
 router = APIRouter(prefix="/api/v1/collections", tags=["collections"])
 
@@ -54,12 +58,29 @@ class CollectionFilters(BaseModel):
 
 
 class CreateCollectionRequest(BaseModel):
+    """Create a collection.
+
+    Omitting ``filters`` (or sending ``null``) creates a collection with no dynamic rule, whose
+    members are only the clips pinned into it. Sending ``{}`` is a different thing: an empty
+    filter, which matches every clip in the library.
+    """
+
     name: str = Field(min_length=1, max_length=100)
-    filters: CollectionFilters = Field(default_factory=CollectionFilters)
+    filters: Optional[CollectionFilters] = None
+    clips: list[str] = Field(default_factory=list, max_length=MAX_CLIPS_PER_REQUEST)
 
 
 class UpdateCollectionRequest(BaseModel):
-    filters: CollectionFilters
+    """Replace the filter definition — ``null`` drops the dynamic rule and keeps only the pins.
+
+    Pinned members are never touched here; the clips routes below manage those.
+    """
+
+    filters: Optional[CollectionFilters]
+
+
+class CollectionClipsRequest(BaseModel):
+    clip_ids: list[str] = Field(min_length=1, max_length=MAX_CLIPS_PER_REQUEST)
 
 
 @router.get("")
@@ -73,12 +94,13 @@ def list_collections(root: ActiveLibraryRootDep) -> dict[str, Any]:
 
 @router.post("", status_code=201)
 def create_collection(body: CreateCollectionRequest, root: ActiveLibraryRootDep) -> dict[str, Any]:
+    filters = None if body.filters is None else body.filters.to_clip_filter()
     try:
-        summary = collection_service.create_collection(
-            root, body.name, body.filters.to_clip_filter()
-        )
+        summary = collection_service.create_collection(root, body.name, filters, body.clips)
     except CollectionError as err:
         raise ApiException(422, "invalid_collection", str(err)) from err
+    except CatalogError as err:
+        raise ApiException(404, "clip_not_found", str(err)) from err
     return summary.to_dict()
 
 
@@ -94,10 +116,9 @@ def get_collection(collection_id: str, root: ActiveLibraryRootDep) -> dict[str, 
 def update_collection(
     collection_id: str, body: UpdateCollectionRequest, root: ActiveLibraryRootDep
 ) -> dict[str, Any]:
+    filters = None if body.filters is None else body.filters.to_clip_filter()
     try:
-        summary = collection_service.update_collection(
-            root, collection_id, body.filters.to_clip_filter()
-        )
+        summary = collection_service.update_collection(root, collection_id, filters)
     except CollectionError as err:
         raise ApiException(404, "collection_not_found", str(err)) from err
     return summary.to_dict()
@@ -110,6 +131,32 @@ def delete_collection(collection_id: str, root: ActiveLibraryRootDep) -> Respons
     except CollectionError as err:
         raise ApiException(404, "collection_not_found", str(err)) from err
     return Response(status_code=204)
+
+
+@router.post("/{collection_id}/clips")
+def add_collection_clips(
+    collection_id: str, body: CollectionClipsRequest, root: ActiveLibraryRootDep
+) -> dict[str, Any]:
+    """Pin one or more clips into a collection, regardless of what its filter matches."""
+    try:
+        summary = collection_service.add_clips(root, collection_id, body.clip_ids)
+    except CollectionError as err:
+        raise ApiException(404, "collection_not_found", str(err)) from err
+    except CatalogError as err:
+        raise ApiException(404, "clip_not_found", str(err)) from err
+    return summary.to_dict()
+
+
+@router.delete("/{collection_id}/clips/{clip_id}")
+def remove_collection_clip(
+    collection_id: str, clip_id: str, root: ActiveLibraryRootDep
+) -> dict[str, Any]:
+    """Unpin one clip. A clip the collection's filter still matches remains a member."""
+    try:
+        summary = collection_service.remove_clips(root, collection_id, [clip_id])
+    except CollectionError as err:
+        raise ApiException(404, "collection_not_found", str(err)) from err
+    return summary.to_dict()
 
 
 @router.get("/{collection_id}/clips")

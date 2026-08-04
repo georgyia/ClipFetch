@@ -1,19 +1,35 @@
-"""Dynamic saved collections backed by the shared :class:`ClipFilter`."""
+"""Saved collections: an optional :class:`ClipFilter` plus an explicit member list.
+
+A collection has two independent halves, and its clips are the union of both:
+
+* **Filters** — a saved query, re-evaluated on every read, so membership tracks the catalog.
+  ``filters is None`` means the collection has *no* dynamic rule at all. That is deliberately
+  different from an empty :class:`ClipFilter`, which matches everything.
+* **Members** — clip ids pinned by hand. A pinned clip stays a member even once it no longer
+  matches the filter; pinning is an explicit statement that outranks the query.
+
+Both halves live in the per-library ``collections.json`` sidecar, so a collection travels whole
+when a library is copied. (Favorites are device-local by contrast — they are personal interaction
+state, not part of the library.)
+"""
 
 from __future__ import annotations
 
 import json
 import re
+from collections.abc import Callable, Iterable
 from dataclasses import dataclass
 from datetime import date
 from pathlib import Path
 from typing import Any
 
-from clipfetch.library import ClipFilter, QueryResult, query_library, record_to_dict
+from clipfetch.library import ClipFilter, QueryResult, query_selection, record_to_dict
 from clipfetch.topics import TopicError, load_topics
 
 COLLECTIONS_FILE = ".clipfetch/collections.json"
-COLLECTIONS_SCHEMA_VERSION = 1
+#: v2 added ``clips`` (pinned members) and made ``filters`` nullable. v1 files still load.
+COLLECTIONS_SCHEMA_VERSION = 2
+_SUPPORTED_SCHEMA_VERSIONS = (1, 2)
 _NAME = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
 _FILTER_FIELDS = {
     "min_likes",
@@ -35,8 +51,12 @@ class CollectionError(RuntimeError):
 
 @dataclass(frozen=True)
 class SavedCollection:
+    """One saved collection. ``filters`` is ``None`` when membership is entirely manual."""
+
     name: str
-    filters: ClipFilter
+    filters: ClipFilter | None
+    #: Clip ids pinned by hand, in the order they were added. Members regardless of the filter.
+    clips: tuple[str, ...] = ()
 
 
 def collections_path(root: Path) -> Path:
@@ -51,7 +71,7 @@ def load_collections(root: Path) -> tuple[SavedCollection, ...]:
         value = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, UnicodeError, json.JSONDecodeError) as err:
         raise CollectionError(f"invalid collections file {path}: {err}") from err
-    if not isinstance(value, dict) or value.get("schema_version") != 1:
+    if not isinstance(value, dict) or value.get("schema_version") not in _SUPPORTED_SCHEMA_VERSIONS:
         raise CollectionError("unsupported or missing collections schema version")
     raw = value.get("collections")
     if not isinstance(raw, list):
@@ -65,27 +85,62 @@ def load_collections(root: Path) -> tuple[SavedCollection, ...]:
     return collections
 
 
-def save_collection(root: Path, name: str, filters: ClipFilter) -> SavedCollection:
+def save_collection(
+    root: Path, name: str, filters: ClipFilter | None, clips: Iterable[str] = ()
+) -> SavedCollection:
+    """Save a new collection. ``filters=None`` creates one whose members are only its pinned ids."""
     normalized = normalize_collection_name(name)
     existing = list(load_collections(root))
     if any(item.name == normalized for item in existing):
         raise CollectionError(f"collection already exists: {normalized}")
     _validate_topics(root, filters)
-    saved = SavedCollection(normalized, filters)
+    saved = SavedCollection(normalized, filters, _clip_ids(clips))
     _write(root, (*existing, saved))
     return saved
 
 
-def update_collection(root: Path, name: str, filters: ClipFilter) -> SavedCollection:
-    """Replace an existing collection's filter definition atomically. Raises if it is missing."""
+def update_collection(root: Path, name: str, filters: ClipFilter | None) -> SavedCollection:
+    """Replace an existing collection's filter definition atomically, keeping its pinned members.
+
+    Raises if the collection is missing. Editing the query never drops what was pinned by hand.
+    """
     normalized = normalize_collection_name(name)
-    existing = list(load_collections(root))
-    if not any(item.name == normalized for item in existing):
-        raise CollectionError(f"unknown collection: {normalized}")
     _validate_topics(root, filters)
-    replaced = SavedCollection(normalized, filters)
-    _write(root, tuple(replaced if item.name == normalized else item for item in existing))
-    return replaced
+    return _replace(
+        root, normalized, lambda current: SavedCollection(normalized, filters, current.clips)
+    )
+
+
+def add_clips(root: Path, name: str, clip_ids: Iterable[str]) -> SavedCollection:
+    """Pin clips as members. Idempotent: ids already pinned keep their original position."""
+    added = _clip_ids(clip_ids)
+    return _replace(
+        root,
+        normalize_collection_name(name),
+        lambda current: SavedCollection(
+            current.name,
+            current.filters,
+            current.clips + tuple(item for item in added if item not in current.clips),
+        ),
+    )
+
+
+def remove_clips(root: Path, name: str, clip_ids: Iterable[str]) -> SavedCollection:
+    """Unpin clips. Idempotent, and never errors on an id that was not pinned.
+
+    A clip the filter still matches stays in the collection — unpinning removes the *manual*
+    membership only, and there is no negative membership to express "hide this from my query".
+    """
+    removed = set(_clip_ids(clip_ids))
+    return _replace(
+        root,
+        normalize_collection_name(name),
+        lambda current: SavedCollection(
+            current.name,
+            current.filters,
+            tuple(item for item in current.clips if item not in removed),
+        ),
+    )
 
 
 def delete_collection(root: Path, name: str) -> None:
@@ -106,7 +161,9 @@ def get_collection(root: Path, name: str) -> SavedCollection:
 
 
 def resolve_collection(root: Path, name: str) -> QueryResult:
-    return query_library(root, get_collection(root, name).filters)
+    """Resolve a collection to its current clips: filter matches plus pinned members."""
+    collection = get_collection(root, name)
+    return query_selection(root, collection.filters, collection.clips)
 
 
 def normalize_collection_name(value: str) -> str:
@@ -138,7 +195,11 @@ def filter_to_dict(filters: ClipFilter) -> dict[str, Any]:
 
 
 def collection_to_dict(collection: SavedCollection) -> dict[str, Any]:
-    return {"name": collection.name, "filters": filter_to_dict(collection.filters)}
+    return {
+        "name": collection.name,
+        "filters": None if collection.filters is None else filter_to_dict(collection.filters),
+        "clips": list(collection.clips),
+    }
 
 
 def export_json(root: Path, result: QueryResult) -> str:
@@ -162,10 +223,17 @@ def export_m3u(result: QueryResult) -> str:
 
 
 def _saved(value: Any) -> SavedCollection:
-    if not isinstance(value, dict) or set(value) != {"name", "filters"}:
-        raise CollectionError("each collection must contain only name and filters")
+    # ``clips`` is optional so that a v1 file — written before manual membership existed — loads
+    # unchanged as a collection with no pinned members.
+    if not isinstance(value, dict) or not set(value) <= {"name", "filters", "clips"}:
+        raise CollectionError("each collection must contain only name, filters, and clips")
+    if not {"name", "filters"} <= set(value):
+        raise CollectionError("each collection must contain name and filters")
     name = normalize_collection_name(str(value["name"]))
+    clips = _clip_ids(value.get("clips", ()))
     raw = value["filters"]
+    if raw is None:
+        return SavedCollection(name, None, clips)
     if not isinstance(raw, dict) or set(raw) != _FILTER_FIELDS:
         unknown = set(raw) - _FILTER_FIELDS if isinstance(raw, dict) else set()
         raise CollectionError(f"unsupported or missing collection filter fields: {unknown}")
@@ -184,7 +252,7 @@ def _saved(value: Any) -> SavedCollection:
         )
     except (TypeError, ValueError) as err:
         raise CollectionError(f"invalid collection filters: {err}") from err
-    return SavedCollection(name, filters)
+    return SavedCollection(name, filters, clips)
 
 
 def _write(root: Path, collections: tuple[SavedCollection, ...]) -> None:
@@ -199,8 +267,34 @@ def _write(root: Path, collections: tuple[SavedCollection, ...]) -> None:
     temporary.replace(path)
 
 
-def _validate_topics(root: Path, filters: ClipFilter) -> None:
-    if not filters.topics:
+def _replace(
+    root: Path, name: str, change: Callable[[SavedCollection], SavedCollection]
+) -> SavedCollection:
+    """Rewrite one collection through ``change``, leaving the rest of the file untouched."""
+    existing = list(load_collections(root))
+    current = next((item for item in existing if item.name == name), None)
+    if current is None:
+        raise CollectionError(f"unknown collection: {name}")
+    replaced = change(current)
+    _write(root, tuple(replaced if item.name == name else item for item in existing))
+    return replaced
+
+
+def _clip_ids(value: Any) -> tuple[str, ...]:
+    """Validate pinned clip ids: non-empty strings, de-duplicated, order preserved."""
+    if isinstance(value, str) or not isinstance(value, Iterable):
+        raise CollectionError("collection clips must be a list of clip ids")
+    seen: list[str] = []
+    for item in value:
+        if not isinstance(item, str) or not item.strip():
+            raise CollectionError("collection clips must be a list of non-empty clip ids")
+        if item not in seen:
+            seen.append(item)
+    return tuple(seen)
+
+
+def _validate_topics(root: Path, filters: ClipFilter | None) -> None:
+    if filters is None or not filters.topics:
         return
     try:
         available = {topic.name for topic in load_topics(root).topics}

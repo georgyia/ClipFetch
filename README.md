@@ -83,7 +83,7 @@ clipfetch watch reels        # play the downloaded folder, one clip after anothe
 | **Metadata sidecars** | `--metadata` writes normalized JSON (caption, author, hashtags, engagement, duration, time, URL) beside each clip. |
 | **Portable catalog** | Every completed clip is recorded in `<output>/.clipfetch/catalog.sqlite3` for fast offline library operations. |
 | **Local semantic search** | Optional, offline embedding search over captions/hashtags/transcripts (`semantic` extra). |
-| **Topics & collections** | Local, multilingual categorization and saved dynamic filter definitions. |
+| **Topics & collections** | Local, multilingual categorization, plus collections that combine a saved filter with clips you add by hand. |
 | **Transcripts & comments** | Optional local speech transcription and opt-in Instagram comment enrichment. |
 | **Duplicate reports** | Byte-identical and (optionally) near-duplicate detection — report-only, never destructive. |
 | **Cross-browser cookies** | Reuse a Chrome, Firefox, or Safari login with `--import-cookies`. |
@@ -129,6 +129,9 @@ clipfetch library list reels --topic entrepreneurship
 clipfetch library tag reels ABC123 --topic entrepreneurship
 clipfetch library collection save reels viral-founders --min-likes 1m \
   --topic entrepreneurship
+clipfetch library collection save reels keepers --manual  # no filter: only what you add
+clipfetch library collection add reels keepers --clip ABC123 --clip DEF456
+clipfetch library collection remove reels keepers --clip ABC123
 clipfetch watch reels --collection viral-founders --shuffle
 clipfetch library export reels --collection viral-founders --format m3u
 clipfetch library export reels --collection viral-founders --format json
@@ -202,9 +205,14 @@ entertainment, and news. Definitions are editable through the CLI without retrai
 local, multilingual, multi-label, and stores relevance estimates—not factual claims. Manual tags override model
 assignments and survive re-categorization until removed with `library tag ... --remove`.
 
-Saved collections persist filter definitions—not video paths—so membership stays dynamic as the catalog changes.
-The same filters drive collection show, filtered playback, portable M3U playlists, and stable JSON manifests.
-Exports reference relative paths and never copy or modify video files.
+A saved collection has two halves and contains the union of both. Its **filter** persists a definition—not video
+paths—so membership stays dynamic as the catalog changes. Its **members** are clip ids added by hand with
+`collection add`; a member stays in the collection even once the filter no longer matches it. `--manual` saves a
+collection with no filter at all, so it holds only what you add to it. (That is different from saving with no filter
+options, which stores an empty filter and therefore matches everything.)
+
+The collection as a whole drives collection show, filtered playback, portable M3U playlists, and stable JSON
+manifests. Exports reference relative paths and never copy or modify video files.
 
 Download filters run before submission to the downloader. `COUNT` is the number of accepted clips to attempt;
 `--scan-limit` bounds unique feed candidates (default `max(100, COUNT*10)`). The summary reports scanned,
@@ -305,6 +313,8 @@ Design highlights from the blueprint:
   shortcuts sheet behind `?`.
 - **Faceted discovery** — Explore's filters are chips in a pinned bar, with active filters shown as chips that
   clear individually, all reflected in the URL so a view is shareable and becomes a player queue.
+- **Collect as you browse** — favorite or add to a collection from a card, or multi-select a grid and do it in
+  bulk; collections hold a saved filter, hand-picked clips, or both.
 - **Explainable quality** — a *measured* technical tier (resolution/bitrate/codec) kept separate from any
   recommendation score, so "high quality" always means something.
 - **Transparent jobs** — downloads and enrichment run in a worker with visible phases, failures, and retries.

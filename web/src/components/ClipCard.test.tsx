@@ -72,6 +72,23 @@ test("offers Favorite directly on the card, without opening the clip", () => {
   expect(screen.getByRole("button", { name: /Favorite/ })).toBeInTheDocument();
 });
 
+test("offers Add to collection on the card, and opens the picker in place", async () => {
+  renderCard(makeClip({ caption: "One-pan pasta" }));
+  const add = screen.getByRole("button", { name: "Add One-pan pasta to a collection" });
+
+  fireEvent.click(add);
+  expect(
+    await screen.findByRole("heading", { name: "Add 1 clip to a collection" }),
+  ).toBeInTheDocument();
+});
+
+test("a surface can contribute its own card control, e.g. remove from a collection", () => {
+  renderCard(makeClip(), {
+    action: <button type="button">Remove from keepers</button>,
+  });
+  expect(screen.getByRole("button", { name: "Remove from keepers" })).toBeInTheDocument();
+});
+
 test("shows no checkbox until the grid enters selection mode", () => {
   renderCard();
   expect(screen.queryByRole("checkbox")).toBeNull();

@@ -1,7 +1,10 @@
+import { type ReactNode, useState } from "react";
 import { Link } from "react-router-dom";
 import { type ClipSummary, mediaUrl, posterUrl } from "../api/types";
 import { compactCount, formatDuration } from "../lib/format";
 import { useHoverPreview } from "../lib/useHoverPreview";
+import { AddToCollection } from "./AddToCollection";
+import { Button } from "./Button";
 import styles from "./ClipCard.module.css";
 import { FavoriteButton } from "./FavoriteButton";
 import { Icon } from "./Icon";
@@ -15,6 +18,8 @@ export interface ClipCardProps {
   selectable?: boolean;
   selected?: boolean;
   onSelectChange?: (selected: boolean) => void;
+  /** An extra control for the card overlay, contributed by the surface showing the card. */
+  action?: ReactNode;
 }
 
 /**
@@ -57,11 +62,13 @@ export function ClipCard({
   selectable = false,
   selected = false,
   onSelectChange,
+  action,
 }: ClipCardProps) {
   const duration = formatDuration(clip.duration_seconds);
   const label = clip.caption?.trim() || clip.author || "Untitled clip";
   const clamped = progress == null ? null : Math.max(0, Math.min(1, progress));
   const preview = useHoverPreview();
+  const [adding, setAdding] = useState(false);
   const showPreview = preview.active && clip.available;
   const wrapClass = `${styles.posterWrap} ${clip.available ? "" : styles.unavailable}`.trim();
 
@@ -131,8 +138,17 @@ export function ClipCard({
           </label>
         ) : null}
 
-        {/* Favorite without leaving the grid — the single most-repeated action on a browse page. */}
+        {/* Favorite and collect without leaving the grid — the most-repeated browse actions. */}
         <div className={styles.cardActions}>
+          {action}
+          <Button
+            variant="subtle"
+            size="sm"
+            iconOnly
+            icon={Icons.addToCollection}
+            aria-label={`Add ${label} to a collection`}
+            onClick={() => setAdding(true)}
+          />
           <FavoriteButton clipId={clip.id} compact />
         </div>
       </div>
@@ -141,6 +157,11 @@ export function ClipCard({
         <p className={styles.caption}>{label}</p>
         <Subtitle clip={clip} />
       </div>
+
+      {/* Mounted only while open, so a grid of cards does not carry a dialog each. */}
+      {adding ? (
+        <AddToCollection open onClose={() => setAdding(false)} clipIds={[clip.id]} />
+      ) : null}
     </article>
   );
 }

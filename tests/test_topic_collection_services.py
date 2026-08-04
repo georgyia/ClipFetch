@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from clipfetch.catalog import Catalog, CatalogRecord
+from clipfetch.catalog import Catalog, CatalogError, CatalogRecord
 from clipfetch.collections import CollectionError
 from clipfetch.library import ClipFilter
 from clipfetch.services import collection_service, topic_service
@@ -114,3 +114,31 @@ def test_create_collection_rejects_unknown_topic(tmp_path):
         collection_service.create_collection(
             tmp_path, "bad", ClipFilter(topics=("not-a-real-topic",))
         )
+
+
+def test_pinned_clips_paginate_alongside_filter_matches(tmp_path):
+    _library(tmp_path)
+    collection_service.create_collection(tmp_path, "popular", ClipFilter(min_likes=1_000_000))
+    summary = collection_service.add_clips(tmp_path, "popular", ["CLIP01"])
+    assert summary.pinned == ("CLIP01",) and summary.clip_count == 3
+    assert summary.to_dict()["pinned_count"] == 1
+
+    # One sort order over the union, not the filter matches followed by the pins.
+    page = collection_service.list_collection_clips(tmp_path, "popular", sort="likes")
+    assert [item.id for item in page.items] == ["CLIP04", "CLIP02", "CLIP01"]
+
+    first = collection_service.list_collection_clips(tmp_path, "popular", sort="likes", limit=2)
+    assert [item.id for item in first.items] == ["CLIP04", "CLIP02"]
+    assert first.total_matched == 3 and first.next_cursor is not None
+    rest = collection_service.list_collection_clips(
+        tmp_path, "popular", sort="likes", cursor=first.next_cursor
+    )
+    assert [item.id for item in rest.items] == ["CLIP01"] and rest.next_cursor is None
+
+
+def test_pinning_an_unknown_clip_raises_before_writing(tmp_path):
+    _library(tmp_path)
+    collection_service.create_collection(tmp_path, "manual", None)
+    with pytest.raises(CatalogError):
+        collection_service.add_clips(tmp_path, "manual", ["CLIP01", "NOPE"])
+    assert collection_service.get_collection_summary(tmp_path, "manual").pinned == ()

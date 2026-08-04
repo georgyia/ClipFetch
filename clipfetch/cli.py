@@ -245,25 +245,28 @@ def _run_watch(args: list[str], console: Console) -> int:
     if not parsed.collection and not direct:
         return watch(parsed.dir, console, shuffle=parsed.shuffle)
     from clipfetch.catalog import CatalogError
-    from clipfetch.collections import CollectionError, get_collection
+    from clipfetch.collections import CollectionError, resolve_collection
     from clipfetch.library import ClipFilter, parse_magnitude, query_library
 
     try:
-        filters = (
-            get_collection(parsed.dir, parsed.collection).filters
-            if parsed.collection
-            else ClipFilter(
-                min_likes=parse_magnitude(parsed.min_likes) if parsed.min_likes else None,
-                max_likes=parse_magnitude(parsed.max_likes) if parsed.max_likes else None,
-                min_views=parse_magnitude(parsed.min_views) if parsed.min_views else None,
-                max_views=parse_magnitude(parsed.max_views) if parsed.max_views else None,
-                authors=tuple(parsed.author),
-                hashtags=tuple(parsed.hashtag),
-                platforms=tuple(parsed.platform),
-                topics=tuple(parsed.topic),
+        # A collection resolves to its filter matches *and* its pinned clips, so watching one
+        # plays exactly what browsing it shows.
+        if parsed.collection:
+            result = resolve_collection(parsed.dir, parsed.collection)
+        else:
+            result = query_library(
+                parsed.dir,
+                ClipFilter(
+                    min_likes=parse_magnitude(parsed.min_likes) if parsed.min_likes else None,
+                    max_likes=parse_magnitude(parsed.max_likes) if parsed.max_likes else None,
+                    min_views=parse_magnitude(parsed.min_views) if parsed.min_views else None,
+                    max_views=parse_magnitude(parsed.max_views) if parsed.max_views else None,
+                    authors=tuple(parsed.author),
+                    hashtags=tuple(parsed.hashtag),
+                    platforms=tuple(parsed.platform),
+                    topics=tuple(parsed.topic),
+                ),
             )
-        )
-        result = query_library(parsed.dir, filters)
     except (CatalogError, CollectionError, ValueError) as err:
         console.error(str(err))
         return 1
@@ -495,11 +498,27 @@ def _run_library(args: list[str], console: Console) -> int:
     collection_save.add_argument("--topic", action="append", default=[])
     collection_save.add_argument("--downloaded-after", type=date_value)
     collection_save.add_argument("--downloaded-before", type=date_value)
+    collection_save.add_argument(
+        "--manual",
+        action="store_true",
+        help="save with no filter at all: members are only the clips added by hand",
+    )
     collection_list = collection_commands.add_parser("list")
     collection_list.add_argument("dir", nargs="?", default="reels", type=Path)
     for command in ("show", "delete"):
         child = collection_commands.add_parser(command)
         child.add_argument("values", nargs="+", metavar="[DIR] NAME")
+    for command in ("add", "remove"):
+        child = collection_commands.add_parser(command)
+        child.add_argument("values", nargs="+", metavar="[DIR] NAME")
+        child.add_argument(
+            "--clip",
+            action="append",
+            default=[],
+            required=True,
+            metavar="CLIP_ID",
+            help="clip id to pin or unpin; repeat for several",
+        )
     export_parser = commands.add_parser("export", help="export a dynamic collection")
     export_parser.add_argument("dir", nargs="?", default="reels", type=Path)
     export_parser.add_argument("--collection", required=True)
@@ -695,10 +714,12 @@ def _run_library(args: list[str], console: Console) -> int:
             return 0
         if parsed.command == "collection":
             from clipfetch.collections import (
+                add_clips,
                 collection_to_dict,
                 delete_collection,
                 get_collection,
                 load_collections,
+                remove_clips,
                 resolve_collection,
                 save_collection,
             )
@@ -715,23 +736,46 @@ def _run_library(args: list[str], console: Console) -> int:
                 console.error(f"library collection {parsed.collection_command} expects [DIR] NAME")
                 return 2
             if parsed.collection_command == "save":
-                filters = ClipFilter(
-                    min_likes=parsed.min_likes,
-                    max_likes=parsed.max_likes,
-                    min_views=parsed.min_views,
-                    max_views=parsed.max_views,
-                    authors=tuple(parsed.author),
-                    hashtags=tuple(parsed.hashtag),
-                    platforms=tuple(parsed.platform),
-                    topics=tuple(parsed.topic),
-                    downloaded_after=parsed.downloaded_after,
-                    downloaded_before=parsed.downloaded_before,
+                # Distinct from the ClipFilter locals elsewhere in this dispatcher: a collection's
+                # filter is optional, and None means "no query, members only".
+                saved_filters: ClipFilter | None = (
+                    None
+                    if parsed.manual
+                    else ClipFilter(
+                        min_likes=parsed.min_likes,
+                        max_likes=parsed.max_likes,
+                        min_views=parsed.min_views,
+                        max_views=parsed.max_views,
+                        authors=tuple(parsed.author),
+                        hashtags=tuple(parsed.hashtag),
+                        platforms=tuple(parsed.platform),
+                        topics=tuple(parsed.topic),
+                        downloaded_after=parsed.downloaded_after,
+                        downloaded_before=parsed.downloaded_before,
+                    )
                 )
-                saved = save_collection(root, name, filters)
+                saved = save_collection(root, name, saved_filters)
                 console.success(f"Saved collection {saved.name}.")
             elif parsed.collection_command == "delete":
                 delete_collection(root, name)
                 console.success(f"Deleted collection {name}.")
+            elif parsed.collection_command in ("add", "remove"):
+                from clipfetch.library import find_clip
+
+                if parsed.collection_command == "add":
+                    # Fail before writing if an id is not in this library, so a typo cannot pin
+                    # something that will never resolve. Unpinning skips the check on purpose.
+                    for clip_id in parsed.clip:
+                        find_clip(root, clip_id)
+                    saved = add_clips(root, name, parsed.clip)
+                    verb = "Added"
+                else:
+                    saved = remove_clips(root, name, parsed.clip)
+                    verb = "Removed"
+                count = len(parsed.clip)
+                console.success(
+                    f"{verb} {count} clip(s); {name} now pins {len(saved.clips)} clip(s)."
+                )
             else:
                 saved = get_collection(root, name)
                 result = resolve_collection(root, name)
@@ -777,9 +821,7 @@ def _run_library(args: list[str], console: Console) -> int:
                 from clipfetch.platforms import BY_KEY
 
                 if parsed.max_comments > HARD_MAX_COMMENTS:
-                    raise CommentsError(
-                        f"max comments must be between 1 and {HARD_MAX_COMMENTS}"
-                    )
+                    raise CommentsError(f"max comments must be between 1 and {HARD_MAX_COMMENTS}")
                 records = select_comment_records(parsed.dir, filters)
                 if not records:
                     console.info("No local Instagram clips matched the requested filters.")

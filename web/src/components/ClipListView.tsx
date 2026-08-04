@@ -1,6 +1,6 @@
 import type { UseInfiniteQueryResult } from "@tanstack/react-query";
 import type { ReactNode } from "react";
-import type { ClipPage } from "../api/types";
+import type { ClipPage, ClipSummary } from "../api/types";
 import type { QueueContext } from "../lib/queueSource";
 import { useSelection } from "../lib/useSelection";
 import { Button } from "./Button";
@@ -23,6 +23,8 @@ export interface ClipListViewProps {
   emptyAction?: ReactNode;
   /** When set, a Play-all/Shuffle control opens the player with this list as the queue. */
   queueContext?: QueueContext;
+  /** A context-specific control for each card, e.g. "remove from this collection". */
+  cardAction?: (clip: ClipSummary) => ReactNode;
 }
 
 /** Renders a cursor-paginated clip list with loading/error/empty states and a Load-more control. */
@@ -34,6 +36,7 @@ export function ClipListView({
   emptyIcon,
   emptyAction,
   queueContext,
+  cardAction,
 }: ClipListViewProps) {
   const selection = useSelection();
   const {
@@ -90,7 +93,7 @@ export function ClipListView({
           )}
         </div>
       </div>
-      <ClipGrid items={items} label={title} selection={selection} />
+      <ClipGrid items={items} label={title} selection={selection} cardAction={cardAction} />
       <SelectionBar selection={selection} allIds={items.map((item) => item.id)} />
 
       {hasNextPage ? (

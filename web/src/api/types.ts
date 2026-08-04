@@ -100,8 +100,13 @@ export interface TopicSummary {
 
 export interface CollectionSummary {
   id: string;
-  filters: Record<string, unknown>;
+  /** The saved query, or null when the collection has no dynamic rule and holds only its pins. */
+  filters: Record<string, unknown> | null;
+  /** Size of the union: what the filter matches plus what was pinned by hand. */
   clip_count: number;
+  /** Clip ids pinned into the collection, in the order they were added. */
+  pinned: string[];
+  pinned_count: number;
 }
 
 export interface SearchResponse {

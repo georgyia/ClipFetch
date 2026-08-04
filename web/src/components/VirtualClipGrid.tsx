@@ -1,5 +1,5 @@
 import { useWindowVirtualizer } from "@tanstack/react-virtual";
-import { useEffect, useRef, useState } from "react";
+import { type ReactNode, useEffect, useRef, useState } from "react";
 import type { ClipSummary } from "../api/types";
 import type { Selection } from "../lib/useSelection";
 import { ClipCard } from "./ClipCard";
@@ -10,6 +10,7 @@ export interface VirtualClipGridProps {
   label: string;
   progressById?: Record<string, number>;
   selection?: Selection;
+  cardAction?: (clip: ClipSummary) => ReactNode;
 }
 
 /*
@@ -58,7 +59,13 @@ export function gridGeometry(containerWidth: number, viewportWidth: number): Gri
  * It virtualizes against the window rather than an inner scroll container, so the page keeps one
  * scrollbar and the browser's own scroll restoration keeps working.
  */
-export function VirtualClipGrid({ items, label, progressById, selection }: VirtualClipGridProps) {
+export function VirtualClipGrid({
+  items,
+  label,
+  progressById,
+  selection,
+  cardAction,
+}: VirtualClipGridProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [geometry, setGeometry] = useState<GridGeometry>({
     columns: 1,
@@ -130,6 +137,7 @@ export function VirtualClipGrid({ items, label, progressById, selection }: Virtu
                   selectable={selection?.active}
                   selected={selection?.has(clip.id)}
                   onSelectChange={(next) => selection?.toggle(clip.id, next)}
+                  action={cardAction?.(clip)}
                 />
               ))}
             </li>
