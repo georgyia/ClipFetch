@@ -125,6 +125,28 @@ and **Clear all** resets the filters while keeping your chosen sort order.
 Every filter lives in the URL, so a filtered view is shareable and refresh-safe — and **Play all**
 or **Shuffle** turns that exact set into a player queue.
 
+### Collections: saved filters, hand-picked clips, or both
+
+A collection can work two ways, and one collection can do both at once:
+
+- **Filtered** — the collection stores a *query* (topic, platform, minimum likes). Membership is
+  re-evaluated every time you open it, so it keeps up as your library grows.
+- **Added by hand** — you put specific clips in it. Hover any card and use the folder-plus control,
+  or press **Select** on a grid, tick several clips, and use **Add to collection** in the bar that
+  appears. A clip you added stays in the collection even if it does not match the filter.
+
+Create either kind on the **Collections** page, or straight from the add-to-collection dialog:
+naming a new collection there creates one with **no filter**, so it holds exactly what you put in it
+and never grows on its own.
+
+Open a collection to browse it. Clips you added by hand carry a small **✕** — that removes them from
+the collection, never from your library. Clips the *filter* matched have no such control: they leave
+when they stop matching the filter, which you change by editing the collection.
+
+Collections are stored with the library (`.clipfetch/collections.json`), so they travel with it if
+you copy the folder to another machine — and the CLI sees the same collections:
+`clipfetch library collection add reels keepers --clip ABC123`.
+
 ### Choosing a theme
 
 Watch ships a refined dark theme and a light theme. **Settings → Appearance** offers *System*,

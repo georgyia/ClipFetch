@@ -65,3 +65,29 @@ test("deletes a collection", async () => {
     expect(screen.queryByRole("link", { name: "Popular" })).not.toBeInTheDocument(),
   );
 });
+
+test("a hand-picked collection is saved with no filter rather than an empty one", async () => {
+  renderPage();
+  await screen.findByRole("link", { name: "Popular" });
+
+  fireEvent.change(screen.getByLabelText("Name"), { target: { value: "keepers" } });
+  fireEvent.change(screen.getByLabelText("Membership"), { target: { value: "manual" } });
+  // An empty filter would match the whole library, so the filter controls are not offered.
+  expect(screen.getByLabelText("Topic")).toBeDisabled();
+  fireEvent.click(screen.getByRole("button", { name: "Create" }));
+
+  await waitFor(() => {
+    const posts = vi
+      .mocked(globalThis.fetch)
+      .mock.calls.filter(([, init]) => init?.method === "POST");
+    expect(JSON.parse(String(posts[0][1]?.body)).filters).toBeNull();
+  });
+});
+
+test("editing a filtered collection keeps its filter unless membership is changed", async () => {
+  renderPage();
+  fireEvent.click((await screen.findAllByRole("button", { name: "Edit" }))[0]);
+
+  expect(screen.getByLabelText("Membership")).toHaveValue("filtered");
+  expect(screen.getByLabelText("Min likes")).toHaveValue("1000000");
+});

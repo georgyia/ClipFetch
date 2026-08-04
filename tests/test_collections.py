@@ -9,14 +9,18 @@ import pytest
 from clipfetch.catalog import Catalog, CatalogRecord
 from clipfetch.collections import (
     CollectionError,
+    add_clips,
     collections_path,
     delete_collection,
     export_json,
     export_m3u,
+    filter_to_dict,
     get_collection,
     load_collections,
+    remove_clips,
     resolve_collection,
     save_collection,
+    update_collection,
 )
 from clipfetch.library import ClipFilter
 from clipfetch.topics import TopicConfig, TopicDefinition, save_topics, tag_clip
@@ -109,7 +113,7 @@ def test_malformed_future_fields_and_name_validation(tmp_path):
     path.write_text("{bad", encoding="utf-8")
     with pytest.raises(CollectionError, match="invalid collections"):
         load_collections(tmp_path)
-    path.write_text(json.dumps({"schema_version": 2, "collections": []}), encoding="utf-8")
+    path.write_text(json.dumps({"schema_version": 3, "collections": []}), encoding="utf-8")
     with pytest.raises(CollectionError, match="schema"):
         load_collections(tmp_path)
     path.write_text(
@@ -146,3 +150,91 @@ def test_delete_and_unknown_collection(tmp_path):
     assert load_collections(tmp_path) == ()
     with pytest.raises(CollectionError, match="unknown collection"):
         resolve_collection(tmp_path, "saved")
+
+
+def test_pinned_clips_are_members_regardless_of_the_filter(tmp_path):
+    save_collection(tmp_path, "viral", ClipFilter(min_likes=1_000_000))
+    _put(tmp_path, _record("LOW", 10))
+    _put(tmp_path, _record("HIGH", 2_000_000))
+    assert [item.clip_id for item in resolve_collection(tmp_path, "viral").clips] == ["HIGH"]
+
+    add_clips(tmp_path, "viral", ["LOW"])
+    assert {item.clip_id for item in resolve_collection(tmp_path, "viral").clips} == {"LOW", "HIGH"}
+    # A pinned clip stays a member after the query stops matching it, and is counted once.
+    assert resolve_collection(tmp_path, "viral").matched == 2
+
+    add_clips(tmp_path, "viral", ["HIGH"])
+    assert resolve_collection(tmp_path, "viral").matched == 2
+
+    remove_clips(tmp_path, "viral", ["LOW"])
+    assert [item.clip_id for item in resolve_collection(tmp_path, "viral").clips] == ["HIGH"]
+    # Unpinning a clip the filter still matches leaves it in the collection.
+    remove_clips(tmp_path, "viral", ["HIGH"])
+    assert [item.clip_id for item in resolve_collection(tmp_path, "viral").clips] == ["HIGH"]
+
+
+def test_manual_collection_has_no_query_at_all(tmp_path):
+    _put(tmp_path, _record("A", 10))
+    _put(tmp_path, _record("B", 20))
+    # None is not an empty filter: an empty filter would match both clips.
+    save_collection(tmp_path, "manual", None)
+    assert get_collection(tmp_path, "manual").filters is None
+    assert resolve_collection(tmp_path, "manual").matched == 0
+
+    add_clips(tmp_path, "manual", ["B"])
+    assert [item.clip_id for item in resolve_collection(tmp_path, "manual").clips] == ["B"]
+    save_collection(tmp_path, "everything", ClipFilter())
+    assert resolve_collection(tmp_path, "everything").matched == 2
+
+
+def test_pinning_is_idempotent_and_ordered(tmp_path):
+    save_collection(tmp_path, "manual", None, ["B"])
+    assert add_clips(tmp_path, "manual", ["A", "B", "A"]).clips == ("B", "A")
+    assert remove_clips(tmp_path, "manual", ["missing"]).clips == ("B", "A")
+    assert remove_clips(tmp_path, "manual", ["B", "A"]).clips == ()
+    with pytest.raises(CollectionError, match="unknown collection"):
+        add_clips(tmp_path, "ghost", ["A"])
+    with pytest.raises(CollectionError, match="clip ids"):
+        add_clips(tmp_path, "manual", [""])
+
+
+def test_pinned_clip_survives_a_missing_file_as_unavailable(tmp_path):
+    _put(tmp_path, _record("GONE", 10))
+    save_collection(tmp_path, "manual", None, ["GONE"])
+    (tmp_path / "reel_001_GONE.mp4").unlink()
+    clips = resolve_collection(tmp_path, "manual").clips
+    # Filters drop unavailable clips; an explicit pin outranks that, so the loss stays visible.
+    assert [item.clip_id for item in clips] == ["GONE"]
+    assert clips[0].available is False
+
+
+def test_editing_a_collection_keeps_its_pinned_members(tmp_path):
+    _put(tmp_path, _record("A", 10))
+    save_collection(tmp_path, "mixed", ClipFilter(min_likes=1_000_000), ["A"])
+    updated = update_collection(tmp_path, "mixed", ClipFilter(min_likes=5))
+    assert updated.clips == ("A",)
+    assert update_collection(tmp_path, "mixed", None).clips == ("A",)
+
+
+def test_v1_files_load_as_collections_without_members(tmp_path):
+    path = collections_path(tmp_path)
+    path.parent.mkdir()
+    path.write_text(
+        json.dumps(
+            {
+                "schema_version": 1,
+                "collections": [
+                    {"name": "old", "filters": filter_to_dict(ClipFilter(min_likes=5))}
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    loaded = load_collections(tmp_path)
+    assert loaded[0].clips == () and loaded[0].filters == ClipFilter(min_likes=5)
+    # Writing through the new code upgrades the file in place, and it still round-trips.
+    add_clips(tmp_path, "old", ["A"])
+    value = json.loads(path.read_text(encoding="utf-8"))
+    assert value["schema_version"] == 2
+    assert value["collections"][0]["clips"] == ["A"]
+    assert load_collections(tmp_path)[0].clips == ("A",)

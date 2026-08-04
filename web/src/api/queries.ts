@@ -228,36 +228,61 @@ export function useHome() {
   });
 }
 
-export function useCollections() {
+/**
+ * Every saved collection. `enabled` lets a surface that only needs them on demand — the
+ * add-to-collection dialog, opened from a card — avoid fetching until it opens.
+ */
+export function useCollections(enabled = true) {
   return useQuery({
     queryKey: ["collections"],
     queryFn: () => apiGet<{ collections: CollectionSummary[] }>("/api/v1/collections"),
+    enabled,
   });
+}
+
+/**
+ * One collection, including which clips are pinned into it. Keyed separately from the paginated
+ * `["collection", id]` clip list the detail page loads — same resource, different shape.
+ */
+export function useCollection(id: string | undefined) {
+  return useQuery({
+    queryKey: ["collection-summary", id],
+    queryFn: () => apiGet<CollectionSummary>(`/api/v1/collections/${encodeURIComponent(id ?? "")}`),
+    enabled: Boolean(id),
+  });
+}
+
+/**
+ * Refresh everything a membership change can be seen through: the collection index, the rails on
+ * Home, this collection's own summary, and the clip list the detail page pages through.
+ */
+function invalidateCollection(queryClient: ReturnType<typeof useQueryClient>, id?: string) {
+  queryClient.invalidateQueries({ queryKey: ["collections"] });
+  queryClient.invalidateQueries({ queryKey: ["home"] });
+  if (id) {
+    queryClient.invalidateQueries({ queryKey: ["collection-summary", id] });
+    queryClient.invalidateQueries({ queryKey: ["collection", id] });
+  }
 }
 
 export function useCreateCollection() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (input: { name: string; filters: CollectionFilters }) =>
+    // A null filter creates a collection with no query at all: its members are only `clips`.
+    mutationFn: (input: { name: string; filters: CollectionFilters | null; clips?: string[] }) =>
       apiPost<CollectionSummary>("/api/v1/collections", input),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["collections"] });
-      queryClient.invalidateQueries({ queryKey: ["home"] });
-    },
+    onSuccess: (summary) => invalidateCollection(queryClient, summary.id),
   });
 }
 
 export function useUpdateCollection() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (input: { id: string; filters: CollectionFilters }) =>
+    mutationFn: (input: { id: string; filters: CollectionFilters | null }) =>
       apiPut<CollectionSummary>(`/api/v1/collections/${encodeURIComponent(input.id)}`, {
         filters: input.filters,
       }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["collections"] });
-      queryClient.invalidateQueries({ queryKey: ["home"] });
-    },
+    onSuccess: (summary) => invalidateCollection(queryClient, summary.id),
   });
 }
 
@@ -265,10 +290,31 @@ export function useDeleteCollection() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (id: string) => apiDelete<unknown>(`/api/v1/collections/${encodeURIComponent(id)}`),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["collections"] });
-      queryClient.invalidateQueries({ queryKey: ["home"] });
-    },
+    onSuccess: (_result, id) => invalidateCollection(queryClient, id),
+  });
+}
+
+/** Pin clips into a collection, whatever its filter matches. Bulk-capable and idempotent. */
+export function useAddClipsToCollection() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: { id: string; clipIds: string[] }) =>
+      apiPost<CollectionSummary>(`/api/v1/collections/${encodeURIComponent(input.id)}/clips`, {
+        clip_ids: input.clipIds,
+      }),
+    onSuccess: (summary) => invalidateCollection(queryClient, summary.id),
+  });
+}
+
+/** Unpin one clip. A clip the collection's filter still matches stays in it. */
+export function useRemoveClipFromCollection() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: { id: string; clipId: string }) =>
+      apiDelete<CollectionSummary>(
+        `/api/v1/collections/${encodeURIComponent(input.id)}/clips/${encodeURIComponent(input.clipId)}`,
+      ),
+    onSuccess: (_result, input) => invalidateCollection(queryClient, input.id),
   });
 }
 

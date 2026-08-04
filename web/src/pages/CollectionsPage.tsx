@@ -34,8 +34,12 @@ function toFilters(topic: string, platform: string, minLikes: string): Collectio
   return filters;
 }
 
-// Manage saved dynamic collections: create, edit their filter definition, and delete them. Editing
-// and deleting never touch the underlying clips — only the stored filter.
+// Manage saved collections: create, edit their filter definition, and delete them. Editing and
+// deleting never touch the underlying clips — only the stored definition.
+//
+// Membership is deliberately explicit here. A *filtered* collection re-evaluates its query on every
+// read; a *manual* one has no query at all and holds only what was added to it from a grid or a
+// card. Both can hold pinned clips, and pins survive every edit made on this page.
 export function CollectionsPage() {
   const collections = useCollections();
   const topics = useTopics();
@@ -45,6 +49,7 @@ export function CollectionsPage() {
 
   const [editing, setEditing] = useState<string | null>(null);
   const [name, setName] = useState("");
+  const [manual, setManual] = useState(false);
   const [topic, setTopic] = useState("");
   const [platform, setPlatform] = useState("");
   const [minLikes, setMinLikes] = useState("");
@@ -53,6 +58,7 @@ export function CollectionsPage() {
   function reset() {
     setEditing(null);
     setName("");
+    setManual(false);
     setTopic("");
     setPlatform("");
     setMinLikes("");
@@ -62,9 +68,10 @@ export function CollectionsPage() {
   function startEdit(collection: CollectionSummary) {
     setEditing(collection.id);
     setName(collection.id);
-    setTopic(firstString(collection.filters.topics));
-    setPlatform(firstString(collection.filters.platforms));
-    const likes = collection.filters.min_likes;
+    setManual(collection.filters === null);
+    setTopic(firstString(collection.filters?.topics));
+    setPlatform(firstString(collection.filters?.platforms));
+    const likes = collection.filters?.min_likes;
     setMinLikes(typeof likes === "number" ? String(likes) : "");
     setError("");
   }
@@ -72,7 +79,8 @@ export function CollectionsPage() {
   async function onSubmit(event: FormEvent) {
     event.preventDefault();
     setError("");
-    const filters = toFilters(topic, platform, minLikes);
+    // null is not an empty filter: an empty filter would match the entire library.
+    const filters = manual ? null : toFilters(topic, platform, minLikes);
     try {
       if (editing) {
         await update.mutateAsync({ id: editing, filters });
@@ -110,7 +118,11 @@ export function CollectionsPage() {
             <Link to={`/collections/${encodeURIComponent(collection.id)}`} className={styles.name}>
               {titleize(collection.id)}
             </Link>
-            <span className={styles.count}>{collection.clip_count} clips</span>
+            <span className={styles.count}>
+              {collection.clip_count} clips
+              {collection.pinned_count > 0 ? ` · ${collection.pinned_count} added by hand` : ""}
+              {collection.filters === null ? " · no filter" : ""}
+            </span>
             <span className={styles.spacer} />
             <Button variant="ghost" onClick={() => startEdit(collection)}>
               Edit
@@ -141,6 +153,20 @@ export function CollectionsPage() {
           />
         </div>
         <div className={styles.field}>
+          <label className={styles.label} htmlFor="collection-membership">
+            Membership
+          </label>
+          <select
+            id="collection-membership"
+            className={styles.control}
+            value={manual ? "manual" : "filtered"}
+            onChange={(event) => setManual(event.target.value === "manual")}
+          >
+            <option value="filtered">Filtered</option>
+            <option value="manual">Added by hand</option>
+          </select>
+        </div>
+        <div className={styles.field}>
           <label className={styles.label} htmlFor="collection-topic">
             Topic
           </label>
@@ -148,6 +174,7 @@ export function CollectionsPage() {
             id="collection-topic"
             className={styles.control}
             value={topic}
+            disabled={manual}
             onChange={(event) => setTopic(event.target.value)}
           >
             <option value="">Any topic</option>
@@ -166,6 +193,7 @@ export function CollectionsPage() {
             id="collection-platform"
             className={styles.control}
             value={platform}
+            disabled={manual}
             onChange={(event) => setPlatform(event.target.value)}
           >
             <option value="">Any platform</option>
@@ -181,6 +209,7 @@ export function CollectionsPage() {
             id="collection-min-likes"
             className={styles.control}
             value={minLikes}
+            disabled={manual}
             onChange={(event) => setMinLikes(event.target.value)}
           >
             <option value="">Any</option>
@@ -200,9 +229,12 @@ export function CollectionsPage() {
             </Button>
           ) : null}
         </div>
-        {editing ? null : (
-          <p className={styles.hint}>Names use lowercase letters, numbers, and single hyphens.</p>
-        )}
+        <p className={styles.hint}>
+          {manual
+            ? "No filter: this collection holds only the clips you add to it from a grid or a card."
+            : "Filtered: membership is re-evaluated as your library changes. Clips added by hand stay either way."}
+          {editing ? "" : " Names use lowercase letters, numbers, and single hyphens."}
+        </p>
         {error ? (
           <p className={styles.error} role="alert">
             {error}

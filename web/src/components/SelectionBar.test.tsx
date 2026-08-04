@@ -88,6 +88,28 @@ test("actions that need a selection are disabled while none is made", () => {
 
   renderBar(result.current, ["A", "B"]);
   expect(screen.getByRole("button", { name: "Favorite" })).toBeDisabled();
+  expect(screen.getByRole("button", { name: "Add to collection" })).toBeDisabled();
   expect(screen.getByRole("button", { name: "Clear" })).toBeDisabled();
   expect(screen.getByRole("button", { name: "Select all" })).toBeEnabled();
+});
+
+test("bulk add opens the collection picker for the whole selection", async () => {
+  vi.mocked(globalThis.fetch).mockImplementation(
+    async () =>
+      new Response(JSON.stringify({ collections: [] }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }),
+  );
+  const { result } = renderHook(() => useSelection());
+  act(() => result.current.setActive(true));
+  act(() => result.current.toggle("A", true));
+  act(() => result.current.toggle("B", true));
+
+  renderBar(result.current, ["A", "B", "C"]);
+  fireEvent.click(screen.getByRole("button", { name: "Add to collection" }));
+
+  expect(
+    await screen.findByRole("heading", { name: "Add 2 clips to a collection" }),
+  ).toBeInTheDocument();
 });

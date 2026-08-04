@@ -1325,11 +1325,20 @@ GET    /api/v1/collections/{collection_id}
 PATCH  /api/v1/collections/{collection_id}
 DELETE /api/v1/collections/{collection_id}
 GET    /api/v1/collections/{collection_id}/clips
+POST   /api/v1/collections/{collection_id}/clips
+DELETE /api/v1/collections/{collection_id}/clips/{clip_id}
 ```
 
+A collection is a saved filter, a hand-picked member list, or both, and its clips are the union of the two. On
+create and update, `filters: null` means *no dynamic rule* — only the members belong — which is distinct from
+`filters: {}`, an empty filter that matches the whole library. `POST .../clips` takes `{"clip_ids": [...]}` and
+pins clips regardless of the filter (404 if any id is unknown, and the batch then writes nothing); the DELETE
+unpins one, and a clip the filter still matches stays a member. Both return the updated collection summary,
+which carries `filters`, `clip_count` (the union), `pinned`, and `pinned_count`.
+
 Collection mutations validate through the same schema and service used by CLI collection commands
-(`clipfetch/collections.py` — `save_collection`, `resolve_collection`, and the `_FILTER_FIELDS`/`_validate_topics`
-guards). The API layer must not fork this validation.
+(`clipfetch/collections.py` — `save_collection`, `add_clips`/`remove_clips`, `resolve_collection`, and the
+`_FILTER_FIELDS`/`_validate_topics` guards). The API layer must not fork this validation.
 
 ### 10.9 Playback and favorites
 

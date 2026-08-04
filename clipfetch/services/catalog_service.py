@@ -12,11 +12,18 @@ from __future__ import annotations
 
 import base64
 import binascii
+from collections.abc import Sequence
 from pathlib import Path
 
 from clipfetch.catalog import Catalog, CatalogRecord
 from clipfetch.contracts import ClipDetail, ClipPage, ClipSummary, clip_detail, clip_summary
-from clipfetch.library import ClipFilter, find_clip, query_library
+from clipfetch.library import (
+    ClipFilter,
+    QueryResult,
+    find_clip,
+    query_library,
+    query_selection,
+)
 
 DEFAULT_LIMIT = 24
 MAX_LIMIT = 100
@@ -69,14 +76,37 @@ def list_clips(
     """Return one cursor-paginated page of clip summaries with assigned topics attached."""
     page_size = _clamp_limit(limit)
     offset = _decode_cursor(cursor) if cursor is not None else 0
-
     result = query_library(root, filters, sort=sort, limit=page_size, offset=offset)
+    return _page(root, result, offset)
+
+
+def list_selection(
+    root: Path,
+    filters: ClipFilter | None,
+    pinned_ids: Sequence[str] = (),
+    *,
+    sort: str = "date",
+    cursor: str | None = None,
+    limit: int = DEFAULT_LIMIT,
+) -> ClipPage:
+    """Paginate the union of a filter's matches and a set of pinned clip ids.
+
+    ``filters=None`` means there is no query — only the pinned ids are members. See
+    :func:`clipfetch.library.query_selection`.
+    """
+    page_size = _clamp_limit(limit)
+    offset = _decode_cursor(cursor) if cursor is not None else 0
+    result = query_selection(root, filters, pinned_ids, sort=sort, limit=page_size, offset=offset)
+    return _page(root, result, offset)
+
+
+def _page(root: Path, result: QueryResult, offset: int) -> ClipPage:
+    """Convert one slice of a query result into a public page, attaching each clip's topics."""
     topics = _topics_for(root, result.clips)
     items = tuple(
         clip_summary(record, topics=topics.get((record.platform, record.clip_id), ()))
         for record in result.clips
     )
-
     next_offset = offset + len(items)
     next_cursor = _encode_cursor(next_offset) if next_offset < result.matched else None
     return ClipPage(items=items, next_cursor=next_cursor, total_matched=result.matched)
@@ -101,5 +131,6 @@ __all__ = [
     "ClipSummary",
     "ClipDetail",
     "list_clips",
+    "list_selection",
     "get_clip",
 ]

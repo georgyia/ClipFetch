@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useToggleFavorite } from "../api/queries";
 import type { Selection } from "../lib/useSelection";
+import { AddToCollection } from "./AddToCollection";
 import { Button } from "./Button";
 import styles from "./SelectionBar.module.css";
 import { useToast } from "./Toast";
@@ -13,17 +14,16 @@ export interface SelectionBarProps {
 }
 
 /**
- * Bulk actions over a multi-selection.
+ * Bulk actions over a multi-selection: favorite, and add to a collection.
  *
- * Only favouriting is offered. Collections in ClipFetch are *filter-defined* — a collection is a
- * saved query, not a list of clip ids — so there is no "add these clips to a collection" operation
- * to expose. Offering one would mean inventing a membership model on the frontend that the catalog
- * does not have.
+ * Adding pins the selection into the collection's hand-picked half, so it works on a filtered
+ * collection the clips do not match — see AddToCollection.
  */
 export function SelectionBar({ selection, allIds }: SelectionBarProps) {
   const toggleFavorite = useToggleFavorite();
   const toast = useToast();
   const [busy, setBusy] = useState(false);
+  const [adding, setAdding] = useState(false);
 
   if (!selection.active) {
     return null;
@@ -73,6 +73,15 @@ export function SelectionBar({ selection, allIds }: SelectionBarProps) {
         </Button>
         <Button
           size="sm"
+          variant="subtle"
+          icon={Icons.addToCollection}
+          disabled={count === 0 || busy}
+          onClick={() => setAdding(true)}
+        >
+          Add to collection
+        </Button>
+        <Button
+          size="sm"
           variant="primary"
           icon={Icons.favorite}
           loading={busy}
@@ -90,6 +99,15 @@ export function SelectionBar({ selection, allIds }: SelectionBarProps) {
           Done
         </Button>
       </div>
+
+      {adding ? (
+        <AddToCollection
+          open
+          onClose={() => setAdding(false)}
+          clipIds={selection.ids}
+          onAdded={selection.clear}
+        />
+      ) : null}
     </div>
   );
 }
