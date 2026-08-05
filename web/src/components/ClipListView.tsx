@@ -8,6 +8,7 @@ import { ClipGrid } from "./ClipGrid";
 import styles from "./ClipListView.module.css";
 import { EmptyState } from "./EmptyState";
 import { ErrorState } from "./ErrorState";
+import { ExportMenu } from "./ExportMenu";
 import { PlayAll } from "./PlayAll";
 import { SelectionBar } from "./SelectionBar";
 import { SkeletonGrid } from "./Skeletons";
@@ -25,6 +26,8 @@ export interface ClipListViewProps {
   queueContext?: QueueContext;
   /** A context-specific control for each card, e.g. "remove from this collection". */
   cardAction?: (clip: ClipSummary) => ReactNode;
+  /** When set, the toolbar offers an M3U/JSON download of this view. Omit `format`. */
+  exportPath?: string;
 }
 
 /** Renders a cursor-paginated clip list with loading/error/empty states and a Load-more control. */
@@ -37,6 +40,7 @@ export function ClipListView({
   emptyAction,
   queueContext,
   cardAction,
+  exportPath,
 }: ClipListViewProps) {
   const selection = useSelection();
   const {
@@ -85,6 +89,8 @@ export function ClipListView({
         </p>
         <div className={styles.toolbarActions}>
           {queueContext ? <PlayAll items={items} context={queueContext} /> : null}
+          {/* The export covers the whole match set, not just the pages loaded so far. */}
+          {exportPath ? <ExportMenu path={exportPath} count={total} /> : null}
           {/* Entering selection mode swaps the cards' hover affordances for checkboxes. */}
           {selection.active ? null : (
             <Button variant="subtle" icon={Icons.confirm} onClick={() => selection.setActive(true)}>

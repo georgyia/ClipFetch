@@ -17,8 +17,9 @@ from clipfetch.api.errors import ApiException
 from clipfetch.catalog import CatalogError
 from clipfetch.collections import CollectionError
 from clipfetch.library import ClipFilter
-from clipfetch.services import collection_service
+from clipfetch.services import collection_service, export_service
 from clipfetch.services.catalog_service import InvalidCursorError
+from clipfetch.services.export_service import Export, ExportError
 
 #: A bulk pin is a person selecting clips in a grid, so this is generous but not unbounded.
 MAX_CLIPS_PER_REQUEST = 500
@@ -83,6 +84,20 @@ class CollectionClipsRequest(BaseModel):
     clip_ids: list[str] = Field(min_length=1, max_length=MAX_CLIPS_PER_REQUEST)
 
 
+def _download(export: Export) -> Response:
+    """Serve a rendered export as a file download, naming what the browser should save it as."""
+    return Response(
+        content=export.body,
+        media_type=export.media_type,
+        headers={
+            "Content-Disposition": f'attachment; filename="{export.filename}"',
+            # Lets the caller tell a complete export from one the cap trimmed.
+            "X-Clip-Count": str(export.clip_count),
+            "X-Export-Truncated": "true" if export.truncated else "false",
+        },
+    )
+
+
 @router.get("")
 def list_collections(root: ActiveLibraryRootDep) -> dict[str, Any]:
     try:
@@ -131,6 +146,25 @@ def delete_collection(collection_id: str, root: ActiveLibraryRootDep) -> Respons
     except CollectionError as err:
         raise ApiException(404, "collection_not_found", str(err)) from err
     return Response(status_code=204)
+
+
+@router.get("/{collection_id}/export")
+def export_collection(
+    collection_id: str,
+    root: ActiveLibraryRootDep,
+    format: Annotated[str, Query()] = "m3u",
+    sort: Annotated[str, Query()] = "date",
+) -> Response:
+    """Download a collection as an M3U playlist or a JSON manifest, both library-relative."""
+    if sort not in _SORTS:
+        raise ApiException(422, "invalid_sort", f"sort must be one of: {', '.join(sorted(_SORTS))}")
+    try:
+        export = export_service.export_collection(root, collection_id, fmt=format, sort=sort)
+    except ExportError as err:
+        raise ApiException(422, "invalid_format", str(err)) from err
+    except CollectionError as err:
+        raise ApiException(404, "collection_not_found", str(err)) from err
+    return _download(export)
 
 
 @router.post("/{collection_id}/clips")

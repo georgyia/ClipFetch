@@ -47,6 +47,7 @@ export function CollectionDetailPage() {
             : "Adjust the collection's filters, or add clips to it directly from any grid."
         }
         queueContext={{ from: "collection", key: id }}
+        exportPath={`/api/v1/collections/${encodeURIComponent(id)}/export`}
         cardAction={(clip) =>
           pinned.has(clip.id) ? (
             <Button

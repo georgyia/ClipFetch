@@ -1337,6 +1337,8 @@ DELETE /api/v1/collections/{collection_id}
 GET    /api/v1/collections/{collection_id}/clips
 POST   /api/v1/collections/{collection_id}/clips
 DELETE /api/v1/collections/{collection_id}/clips/{clip_id}
+GET    /api/v1/collections/{collection_id}/export
+GET    /api/v1/clips/export
 ```
 
 A collection is a saved filter, a hand-picked member list, or both, and its clips are the union of the two. On
@@ -1345,6 +1347,13 @@ create and update, `filters: null` means *no dynamic rule* — only the members 
 pins clips regardless of the filter (404 if any id is unknown, and the batch then writes nothing); the DELETE
 unpins one, and a clip the filter still matches stays a member. Both return the updated collection summary,
 which carries `filters`, `clip_count` (the union), `pinned`, and `pinned_count`.
+
+The two export routes render through the CLI's own serializers (`export_m3u` / `export_json`) and
+must never introduce an absolute path: the M3U carries library-relative paths and the JSON manifest
+sets `"library": "."`, which is what makes an export survive the library folder moving. `format` is
+`m3u` or `json`; `/clips/export` takes the same filter allowlist as the listing endpoint, so a
+filtered view exports as it stands. The set is capped (`MAX_EXPORT_CLIPS`) and the response reports
+`X-Clip-Count` and `X-Export-Truncated` rather than silently trimming.
 
 Collection mutations validate through the same schema and service used by CLI collection commands
 (`clipfetch/collections.py` — `save_collection`, `add_clips`/`remove_clips`, `resolve_collection`, and the

@@ -1,0 +1,84 @@
+.menu {
+  position: relative;
+}
+
+.trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: 40px;
+  padding: 0 var(--space-4);
+  border-radius: var(--radius-control);
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font: var(--text-label);
+  cursor: pointer;
+  list-style: none;
+  user-select: none;
+}
+
+/* Safari still paints a disclosure triangle without this. */
+.trigger::-webkit-details-marker {
+  display: none;
+}
+
+.trigger:hover {
+  border-color: var(--color-border-strong, var(--color-border));
+  background: var(--color-surface-raised);
+}
+
+.menu[open] .trigger {
+  border-color: var(--color-accent);
+}
+
+.panel {
+  position: absolute;
+  right: 0;
+  z-index: 20;
+  margin-top: var(--space-2);
+  min-width: 260px;
+  padding: var(--space-4);
+  display: grid;
+  gap: var(--space-2);
+  background: var(--color-surface-raised);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-panel);
+  box-shadow: var(--shadow-raised);
+}
+
+.option {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-card);
+  color: var(--color-text);
+  text-decoration: none;
+}
+
+.option:hover,
+.option:focus-visible {
+  background: var(--color-surface);
+}
+
+.option span {
+  display: grid;
+}
+
+.option small {
+  color: var(--color-text-muted);
+  font: var(--text-label);
+}
+
+.count,
+.note {
+  margin: 0;
+  color: var(--color-text-muted);
+  font: var(--text-label);
+}
+
+.note {
+  padding-top: var(--space-2);
+  border-top: 1px solid var(--color-border-subtle);
+}
