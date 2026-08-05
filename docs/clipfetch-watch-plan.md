@@ -1265,6 +1265,16 @@ GET /api/v1/clips/{clip_id}/transcript
 GET /api/v1/clips/{clip_id}/comments
 ```
 
+The transcript and comment endpoints exist because the clip contract reports that enrichment is
+present without inlining it: a rail of twenty cards must not carry twenty transcripts. Each is
+bounded (a transcript is capped and flags `truncated`; comments page with `limit`/`offset`) and
+carries the enricher's `status` — `complete`, `silent`, `unsupported`, `failed` for transcripts;
+`complete`, `empty`, `disabled`, `deleted`, `rate-limited`, … for comments. The stored
+`transcript_error` / `comment_error` strings are **never** serialized: both hold `str(exception)`
+from a backend that can name local media paths, so the status is the safe explanation. A clip that
+was never enriched answers 200 with a null status rather than 404 — "not enriched" is a state of a
+known clip, not a missing resource.
+
 Supported list parameters should map to the existing `ClipFilter` (`clipfetch/library.py`) and explicitly added service filters:
 
 - `cursor`

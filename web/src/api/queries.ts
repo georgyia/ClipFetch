@@ -14,6 +14,7 @@ import type {
   ClipPage,
   ClipSummary,
   CollectionSummary,
+  CommentPage,
   Diagnostics,
   DirListing,
   HomeResponse,
@@ -23,6 +24,7 @@ import type {
   RescanReport,
   SearchResponse,
   TopicSummary,
+  Transcript,
 } from "./types";
 
 export interface CollectionFilters {
@@ -330,6 +332,31 @@ export function useClipDetail(clipId: string | undefined) {
     queryKey: ["clip", clipId],
     queryFn: () => apiGet<ClipDetail>(`/api/v1/clips/${encodeURIComponent(clipId ?? "")}`),
     enabled: Boolean(clipId),
+  });
+}
+
+/**
+ * A clip's stored transcript. Fetched only when a panel asks for it — the detail payload
+ * deliberately reports that a transcript exists without carrying its body.
+ */
+export function useTranscript(clipId: string | undefined, enabled = true) {
+  return useQuery({
+    queryKey: ["transcript", clipId],
+    queryFn: () =>
+      apiGet<Transcript>(`/api/v1/clips/${encodeURIComponent(clipId ?? "")}/transcript`),
+    enabled: Boolean(clipId) && enabled,
+  });
+}
+
+/** One page of a clip's captured comments. */
+export function useComments(clipId: string | undefined, enabled = true, limit = 50) {
+  return useQuery({
+    queryKey: ["comments", clipId, limit],
+    queryFn: () =>
+      apiGet<CommentPage>(
+        `/api/v1/clips/${encodeURIComponent(clipId ?? "")}/comments?limit=${limit}`,
+      ),
+    enabled: Boolean(clipId) && enabled,
   });
 }
 
