@@ -264,7 +264,11 @@ class AppState:
         self.path = path
         self._connection = connection
         self._connection.row_factory = sqlite3.Row
-        self._lock = threading.Lock()
+        # Reentrant, and held by *reads* as well as writes: one sqlite3 connection is shared by
+        # the request threads and the worker thread (``check_same_thread=False`` disables the
+        # check, not the requirement to serialize). Concurrent statements on one connection
+        # surface as "bad parameter or other API misuse" or as a row that is briefly invisible.
+        self._lock = threading.RLock()
 
     @classmethod
     def open(cls, path: Path | None = None) -> AppState:
@@ -292,7 +296,8 @@ class AppState:
 
     @property
     def schema_version(self) -> int:
-        row = self._connection.execute("SELECT version FROM schema_version").fetchone()
+        with self._lock:
+            row = self._connection.execute("SELECT version FROM schema_version").fetchone()
         return int(row[0])
 
     # -- library registry ------------------------------------------------------
@@ -331,15 +336,17 @@ class AppState:
             return entry
 
     def list_libraries(self) -> tuple[LibraryEntry, ...]:
-        rows = self._connection.execute(
-            "SELECT * FROM app_libraries ORDER BY created_at, id"
-        ).fetchall()
+        with self._lock:
+            rows = self._connection.execute(
+                "SELECT * FROM app_libraries ORDER BY created_at, id"
+            ).fetchall()
         return tuple(_library(row) for row in rows)
 
     def get_library(self, library_id: str) -> LibraryEntry:
-        row = self._connection.execute(
-            "SELECT * FROM app_libraries WHERE id = ?", (library_id,)
-        ).fetchone()
+        with self._lock:
+            row = self._connection.execute(
+                "SELECT * FROM app_libraries WHERE id = ?", (library_id,)
+            ).fetchone()
         if row is None:
             raise AppStateError(f"unknown library: {library_id}")
         return _library(row)
@@ -355,10 +362,11 @@ class AppState:
         return self.get_library(entry.id)
 
     def last_opened_library(self) -> LibraryEntry | None:
-        row = self._connection.execute(
-            "SELECT * FROM app_libraries WHERE last_opened_at IS NOT NULL "
-            "ORDER BY last_opened_at DESC LIMIT 1"
-        ).fetchone()
+        with self._lock:
+            row = self._connection.execute(
+                "SELECT * FROM app_libraries WHERE last_opened_at IS NOT NULL "
+                "ORDER BY last_opened_at DESC LIMIT 1"
+            ).fetchone()
         return _library(row) if row is not None else None
 
     def set_library_health(self, library_id: str, health: str) -> None:
@@ -387,10 +395,11 @@ class AppState:
     # -- playback --------------------------------------------------------------
 
     def get_playback(self, library_id: str, clip_id: str) -> PlaybackEntry | None:
-        row = self._connection.execute(
-            "SELECT * FROM playback_state WHERE library_id = ? AND clip_id = ?",
-            (library_id, clip_id),
-        ).fetchone()
+        with self._lock:
+            row = self._connection.execute(
+                "SELECT * FROM playback_state WHERE library_id = ? AND clip_id = ?",
+                (library_id, clip_id),
+            ).fetchone()
         return _playback(row) if row is not None else None
 
     def upsert_playback(
@@ -429,11 +438,12 @@ class AppState:
         return entry
 
     def recent_playback(self, library_id: str, *, limit: int = 24) -> tuple[PlaybackEntry, ...]:
-        rows = self._connection.execute(
-            "SELECT * FROM playback_state WHERE library_id = ? "
-            "ORDER BY last_played_at DESC, clip_id LIMIT ?",
-            (library_id, max(1, limit)),
-        ).fetchall()
+        with self._lock:
+            rows = self._connection.execute(
+                "SELECT * FROM playback_state WHERE library_id = ? "
+                "ORDER BY last_played_at DESC, clip_id LIMIT ?",
+                (library_id, max(1, limit)),
+            ).fetchall()
         return tuple(_playback(row) for row in rows)
 
     def playback_totals(self, library_id: str) -> dict[str, int]:
@@ -508,16 +518,20 @@ class AppState:
             self._connection.commit()
 
     def is_favorite(self, library_id: str, clip_id: str) -> bool:
-        row = self._connection.execute(
-            "SELECT 1 FROM favorites WHERE library_id = ? AND clip_id = ?", (library_id, clip_id)
-        ).fetchone()
+        with self._lock:
+            row = self._connection.execute(
+                "SELECT 1 FROM favorites WHERE library_id = ? AND clip_id = ?",
+                (library_id, clip_id),
+            ).fetchone()
         return row is not None
 
     def list_favorites(self, library_id: str) -> tuple[str, ...]:
-        rows = self._connection.execute(
-            "SELECT clip_id FROM favorites WHERE library_id = ? ORDER BY created_at DESC, clip_id",
-            (library_id,),
-        ).fetchall()
+        with self._lock:
+            rows = self._connection.execute(
+                "SELECT clip_id FROM favorites WHERE library_id = ? "
+                "ORDER BY created_at DESC, clip_id",
+                (library_id,),
+            ).fetchall()
         return tuple(row["clip_id"] for row in rows)
 
     # -- job queue -------------------------------------------------------------
@@ -750,28 +764,33 @@ class AppState:
             return len(rows)
 
     def get_job(self, job_id: str) -> Job:
-        row = self._connection.execute("SELECT * FROM jobs WHERE id = ?", (job_id,)).fetchone()
+        with self._lock:
+            row = self._connection.execute(
+                "SELECT * FROM jobs WHERE id = ?", (job_id,)
+            ).fetchone()
         if row is None:
             raise AppStateError(f"unknown job: {job_id}")
         return _job(row)
 
     def list_jobs(self, library_id: str | None = None, *, limit: int = 50) -> tuple[Job, ...]:
-        if library_id is None:
-            rows = self._connection.execute(
-                "SELECT * FROM jobs ORDER BY created_at DESC, id LIMIT ?", (max(1, limit),)
-            ).fetchall()
-        else:
-            rows = self._connection.execute(
-                "SELECT * FROM jobs WHERE library_id = ? ORDER BY created_at DESC, id LIMIT ?",
-                (library_id, max(1, limit)),
-            ).fetchall()
+        with self._lock:
+            if library_id is None:
+                rows = self._connection.execute(
+                    "SELECT * FROM jobs ORDER BY created_at DESC, id LIMIT ?", (max(1, limit),)
+                ).fetchall()
+            else:
+                rows = self._connection.execute(
+                    "SELECT * FROM jobs WHERE library_id = ? ORDER BY created_at DESC, id LIMIT ?",
+                    (library_id, max(1, limit)),
+                ).fetchall()
         return tuple(_job(row) for row in rows)
 
     def list_job_events(self, job_id: str, *, after_sequence: int = 0) -> tuple[JobEvent, ...]:
-        rows = self._connection.execute(
-            "SELECT * FROM job_events WHERE job_id = ? AND sequence > ? ORDER BY sequence",
-            (job_id, after_sequence),
-        ).fetchall()
+        with self._lock:
+            rows = self._connection.execute(
+                "SELECT * FROM job_events WHERE job_id = ? AND sequence > ? ORDER BY sequence",
+                (job_id, after_sequence),
+            ).fetchall()
         return tuple(_job_event(row) for row in rows)
 
     # -- job queue internals (assume the lock is held) -------------------------
