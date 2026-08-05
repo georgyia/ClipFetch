@@ -2,9 +2,11 @@
 
 > **Status.** ClipFetch — the command-line downloader, catalog, and library engine — **ships today.**
 > **ClipFetch Watch** — the local-first *streaming interface* over that library — is now a **runnable preview**
-> (`clipfetch web`): browsing, search, collections, and the vertical player work; automated in-app downloading is
-> the remaining gap. See the [user guide](watch-user-guide.md). This page is the short version; the authoritative
-> plan is [clipfetch-watch-plan.md](clipfetch-watch-plan.md).
+> (`clipfetch web`): browsing, search, collections, the vertical player, and in-app Instagram downloading all
+> work. The remaining gaps are platform reach (TikTok and YouTube Shorts downloading) and the library-management
+> work the CLI still owns alone — transcripts, comments, enrichment, and topic editing. See the
+> [user guide](watch-user-guide.md). This page is the short version; the authoritative plan is
+> [clipfetch-watch-plan.md](clipfetch-watch-plan.md).
 
 ## The north star
 

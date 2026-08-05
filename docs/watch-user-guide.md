@@ -5,12 +5,14 @@ collected with the ClipFetch command-line downloader. It runs entirely on your m
 `127.0.0.1`, and organizes your library around your topics, collections, searches, and viewing
 history instead of an algorithmic feed.
 
-> **Status — preview.** Watch is runnable today. It streams a library you build with the ClipFetch
-> CLI: Home rails, Explore, search, collections, favorites, continue-watching, a vertical player,
-> quality tiers, and diagnostics all work. What is **not** wired yet is automated downloading from
-> inside Watch — the job queue and worker are real, but the live browser-driven download source is
-> still to come. Use the CLI to add clips; `clipfetch web --demo` exercises the full job pipeline
-> with an offline, deterministic fake source (no network or sign-in).
+> **Status — preview.** Watch is runnable today: Home rails, Explore, search, collections,
+> favorites, continue-watching, a vertical player, quality tiers, and diagnostics all work — and so
+> does **downloading from inside Watch**. Connect Instagram once and the background worker drives
+> the same browser stack the CLI uses, with live progress, retries, and cancellation
+> ([Downloads](#downloads)). Instagram is the supported source: TikTok is experimental and
+> anti-botted, YouTube Shorts downloading is unavailable, and UI-triggered sign-in needs a local
+> display. `clipfetch web --demo` swaps in an offline, deterministic fake source (no network or
+> sign-in) for trying the job pipeline itself.
 
 ---
 
