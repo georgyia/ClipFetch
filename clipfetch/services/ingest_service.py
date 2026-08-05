@@ -33,7 +33,7 @@ DEFAULT_LEASE_SECONDS = 60.0
 #: a job that sits in the queue forever, or — worse, before this was enforced — one that fell
 #: through to the download path and harvested the feed instead. ``jobs_service`` re-exports this so
 #: both ends stay in step by construction.
-RUNNABLE_JOB_KINDS = ("download",)
+RUNNABLE_JOB_KINDS = ("download", "enrich")
 
 
 class IngestError(RuntimeError):
@@ -221,6 +221,9 @@ def process_next_job(
     def cancelled() -> bool:
         return appstate.get_job(job.id).cancel_requested
 
+    if job.kind == "enrich":
+        return _run_enrich_job(appstate, job, job_root, owner, on_progress=on_progress)
+
     try:
         request = _parse_request(job.request_json)
         result = run_ingest(
@@ -246,6 +249,47 @@ def process_next_job(
         job.id, owner,
         result_json=json.dumps({"downloaded": result.count, "clip_ids": result.downloaded_ids}),
     )
+
+
+def _run_enrich_job(
+    appstate: AppState,
+    job: Job,
+    root: Path,
+    owner: str,
+    *,
+    on_progress: Callable[[int, int, str], None],
+) -> Job:
+    """Add a transcript or comments to one clip.
+
+    Kept beside the download path rather than in the worker, so *how a job of each kind is claimed,
+    heartbeated, and finished* stays in one function — only the work in the middle differs.
+    """
+    from clipfetch.services import enrichment_jobs
+
+    try:
+        request = enrichment_jobs.EnrichRequest.parse(json.loads(job.request_json or "{}"))
+    except (ValueError, TypeError) as err:
+        # A malformed payload cannot become valid on a retry.
+        return appstate.fail_job(
+            job.id, owner, error_code="invalid_request", error_message=str(err), retry=False
+        )
+
+    try:
+        result = enrichment_jobs.run_enrichment(root, request, on_progress=on_progress)
+    except enrichment_jobs.EnrichmentUnavailable as err:
+        # Missing extras and absent sign-ins do not fix themselves between attempts; the UI turns
+        # the code into the right recovery action instead.
+        return appstate.fail_job(
+            job.id, owner, error_code=err.code, error_message=str(err), retry=False
+        )
+    except Exception:  # noqa: BLE001 - never leak internals into the public job error
+        return appstate.fail_job(
+            job.id,
+            owner,
+            error_code="enrichment_failed",
+            error_message="The enrichment could not be completed.",
+        )
+    return appstate.complete_job(job.id, owner, result_json=json.dumps(result, ensure_ascii=False))
 
 
 @dataclass(frozen=True)

@@ -23,6 +23,7 @@ from clipfetch.appstate import (
     Job,
     JobEvent,
 )
+from clipfetch.services.enrichment_jobs import EnrichRequest
 from clipfetch.services.ingest_service import RUNNABLE_JOB_KINDS
 
 #: Job kinds the API accepts — exactly the kinds the worker can run, never a superset.
@@ -141,6 +142,22 @@ def _active_job_for(appstate: AppState, library_id: str, source_permalink: str) 
     return None
 
 
+def _active_enrichment(
+    appstate: AppState, library_id: str, clip_id: str, target: str
+) -> Job | None:
+    """An in-flight enrichment for the same clip and target, so a double click queues one job."""
+    for job in appstate.list_jobs(library_id, limit=200):
+        if job.kind != "enrich" or job.state not in _ACTIVE_STATES:
+            continue
+        try:
+            payload = json.loads(job.request_json or "{}")
+        except (ValueError, TypeError):  # pragma: no cover - written by this module
+            continue
+        if payload.get("clip_id") == clip_id and payload.get("target") == target:
+            return job
+    return None
+
+
 def enqueue(
     appstate: AppState,
     library_id: str,
@@ -161,6 +178,17 @@ def enqueue(
         existing = _active_job_for(appstate, library_id, source_permalink)
         if existing is not None:
             return view(existing), False
+
+    if kind == "enrich":
+        # Validate the payload here rather than in the worker: an unrunnable request should be
+        # refused while the user is still looking at the button that made it.
+        try:
+            parsed = EnrichRequest.parse(request)
+        except ValueError as err:
+            raise JobServiceError(str(err)) from err
+        active = _active_enrichment(appstate, library_id, parsed.clip_id, parsed.target)
+        if active is not None:
+            return view(active), False
 
     job = appstate.enqueue_job(
         library_id,

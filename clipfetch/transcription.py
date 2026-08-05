@@ -5,7 +5,7 @@ from __future__ import annotations
 import hashlib
 import importlib
 import time
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Protocol
@@ -109,14 +109,21 @@ def enrich_transcripts(
     transcriber: Transcriber,
     filters: ClipFilter | None = None,
     *,
+    records: Sequence[CatalogRecord] | None = None,
     force: bool = False,
     on_progress: Callable[[int, int, str, CatalogRecord], None] | None = None,
 ) -> EnrichmentReport:
-    """Process matching files independently and commit every terminal status."""
-    result = query_library(root, filters)
+    """Process matching files independently and commit every terminal status.
+
+    Pass ``records`` to transcribe an explicit set — a single clip asked for from the app, say —
+    instead of everything ``filters`` matches. This mirrors ``comments.enrich_comments``, which has
+    always taken its records, and keeps every status/error path in one place rather than growing a
+    second per-clip implementation elsewhere.
+    """
+    selected = tuple(records) if records is not None else query_library(root, filters).clips
     completed = skipped = silent = unsupported = failed = 0
-    total = len(result.clips)
-    for index, record in enumerate(result.clips, start=1):
+    total = len(selected)
+    for index, record in enumerate(selected, start=1):
         path = root / record.relative_path
         try:
             source_hash = _file_hash(path)

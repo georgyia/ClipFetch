@@ -32,6 +32,10 @@ function jsonFor(url: string) {
   if (url.includes("/related")) {
     return RELATED;
   }
+  // The page now offers enrichment actions, which read the job list to follow what they start.
+  if (url.includes("/jobs")) {
+    return { jobs: [] };
+  }
   return DETAIL;
 }
 

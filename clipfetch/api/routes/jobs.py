@@ -31,10 +31,14 @@ _STREAM_POLL_SECONDS = 0.5
 
 
 class EnqueueJobRequest(BaseModel):
+    """A download (``url``/``count``/``quality``) or an enrichment (``clip_id``/``target``)."""
+
     kind: str = "download"
     url: Optional[str] = Field(default=None, max_length=2048)
     count: int = Field(default=1, ge=1, le=200)
     quality: Optional[str] = Field(default=None, max_length=32)
+    clip_id: Optional[str] = Field(default=None, max_length=256)
+    target: Optional[str] = Field(default=None, max_length=32)
 
 
 @router.get("")
@@ -47,11 +51,35 @@ def list_jobs(
     return {"jobs": [view.to_dict() for view in views]}
 
 
+def _require_enrichment_is_possible(target: Optional[str]) -> None:
+    """Refuse an enrichment this machine cannot perform, before it is queued.
+
+    Queueing work that will certainly fail is worse than refusing it: the user waits for a job to
+    reach the front of the queue only to be told to install something. The recovery action travels
+    with the error so the UI can point at the fix.
+    """
+    if target != "transcript":
+        return
+    from clipfetch.api.capabilities import capability_matrix
+
+    if not capability_matrix().get("transcription", {}).get("available", False):
+        raise ApiException(
+            422,
+            "transcription_unavailable",
+            'Local transcription is not installed. Run: pip install "clipfetch[transcribe]"',
+            recovery_actions=("install_extra",),
+        )
+
+
 @router.post("", status_code=201)
 def enqueue_job(
     body: EnqueueJobRequest, appstate: AppStateDep, library: ActiveLibraryDep, response: Response
 ) -> dict[str, Any]:
-    request = {"count": body.count, "quality": body.quality}
+    if body.kind == "enrich":
+        request: dict[str, Any] = {"clip_id": body.clip_id, "target": body.target}
+        _require_enrichment_is_possible(body.target)
+    else:
+        request = {"count": body.count, "quality": body.quality}
     try:
         view, created = jobs_service.enqueue(
             appstate, library.id, body.kind, source_permalink=body.url, request=request

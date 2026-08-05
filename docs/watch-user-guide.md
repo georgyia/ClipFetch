@@ -161,9 +161,20 @@ page carries what that produced:
 - **Comments** — what was captured, with the time it was captured. These are a **local snapshot**,
   not a live view: they are the comments as they were when fetched, and the panel says so.
 
-Neither panel appears for a clip that has no enrichment. If a run finished without producing
-anything, the panel explains why in plain terms — no speech found, comments turned off by the
-creator, the post was deleted, rate-limited, and so on.
+Neither panel appears for a clip that has no enrichment — instead, the clip page offers **Add
+transcript** and **Fetch comments**. Those run as real jobs on the same queue as downloads, so you
+get progress, retries, and cancellation on the Downloads page, and the result appears on the clip
+page as soon as it lands.
+
+Both have prerequisites, and Watch checks them *before* queueing anything rather than letting a job
+fail at the front of the queue:
+
+- **Transcripts** need the local speech extra: `pip install "clipfetch[transcribe]"`. Without it the
+  button tells you exactly that.
+- **Comments** need a signed-in Instagram session — connect the account in Settings first.
+
+If a run finished without producing anything, the panel explains why in plain terms — no speech
+found, comments turned off by the creator, the post was deleted, rate-limited, and so on.
 
 ### Exporting a view
 

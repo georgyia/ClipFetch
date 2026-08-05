@@ -73,16 +73,67 @@ def test_unknown_kind_is_rejected(tmp_path):
     assert resp.status_code == 422
 
 
-def test_a_kind_the_worker_cannot_run_is_refused_at_enqueue(tmp_path):
-    """Enrichment is planned (#180) but unimplemented, so the API must not take the request.
-
-    Accepting it would queue work nothing can perform — and the worker claims by age, not by kind.
-    """
+def test_an_enrichment_needs_a_clip_and_a_target(tmp_path):
+    """The payload is validated at enqueue, while the user is still looking at the button."""
     client, _ = _client(tmp_path)
-    resp = client.post("/api/v1/jobs", json={"kind": "enrich", "url": "https://x/p/1"})
-    assert resp.status_code == 422
-    assert resp.json()["error"]["code"] == "invalid_job"
+    for payload in (
+        {"kind": "enrich"},
+        {"kind": "enrich", "clip_id": "IG_COOK1"},
+        {"kind": "enrich", "clip_id": "IG_COOK1", "target": "vibes"},
+    ):
+        resp = client.post("/api/v1/jobs", json=payload)
+        assert resp.status_code == 422
+        assert resp.json()["error"]["code"] == "invalid_job"
     assert client.get("/api/v1/jobs").json()["jobs"] == []
+
+
+def test_enqueuing_an_enrichment_is_idempotent_per_clip_and_target(tmp_path):
+    client, _ = _client(tmp_path)
+    body = {"kind": "enrich", "clip_id": "IG_COOK1", "target": "comments"}
+
+    first = client.post("/api/v1/jobs", json=body)
+    second = client.post("/api/v1/jobs", json=body)
+    assert first.status_code == 201 and second.status_code == 200
+    assert first.json()["id"] == second.json()["id"]
+
+    # A different target for the same clip is a different job.
+    other = client.post(
+        "/api/v1/jobs", json={"kind": "enrich", "clip_id": "IG_COOK1", "target": "transcript"}
+    )
+    assert other.status_code in (201, 422)  # 422 only when the transcribe extra is absent
+
+
+def test_transcription_is_refused_when_the_extra_is_missing(tmp_path, monkeypatch):
+    """Better to refuse now than to queue work that will certainly fail once it runs."""
+    from clipfetch.api import capabilities
+
+    monkeypatch.setattr(
+        capabilities,
+        "capability_matrix",
+        lambda: {"transcription": {"available": False, "reason": "dependency_missing"}},
+    )
+    client, _ = _client(tmp_path)
+    resp = client.post(
+        "/api/v1/jobs", json={"kind": "enrich", "clip_id": "IG_COOK1", "target": "transcript"}
+    )
+    assert resp.status_code == 422
+    assert resp.json()["error"]["code"] == "transcription_unavailable"
+    assert "clipfetch[transcribe]" in resp.json()["error"]["message"]
+    assert client.get("/api/v1/jobs").json()["jobs"] == []
+
+
+def test_transcription_is_accepted_when_the_extra_is_present(tmp_path, monkeypatch):
+    from clipfetch.api import capabilities
+
+    monkeypatch.setattr(
+        capabilities, "capability_matrix", lambda: {"transcription": {"available": True}}
+    )
+    client, _ = _client(tmp_path)
+    resp = client.post(
+        "/api/v1/jobs", json={"kind": "enrich", "clip_id": "IG_COOK1", "target": "transcript"}
+    )
+    assert resp.status_code == 201
+    assert resp.json()["kind"] == "enrich"
 
 
 def test_cancel_queued_job(tmp_path):

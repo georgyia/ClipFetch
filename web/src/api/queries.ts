@@ -187,6 +187,29 @@ export function useEnqueueJob() {
   });
 }
 
+/**
+ * Ask for one clip's enrichment — a transcript, or its comments — as a background job.
+ *
+ * Enqueuing is idempotent per clip and target, so a double click follows one job rather than
+ * queueing two. A prerequisite the machine does not have (the transcribe extra) is refused here
+ * with a 422 rather than queued, so the message arrives immediately instead of at the front of
+ * the queue.
+ */
+export function useEnrichClip() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: { clipId: string; target: "transcript" | "comments" }) =>
+      apiPost<Job>("/api/v1/jobs", {
+        kind: "enrich",
+        clip_id: input.clipId,
+        target: input.target,
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["jobs"] });
+    },
+  });
+}
+
 /** Per-platform sign-in status; polls while a connection is in progress. */
 export function useAccounts() {
   return useQuery({

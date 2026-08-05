@@ -1388,6 +1388,13 @@ sets `"library": "."`, which is what makes an export survive the library folder 
 filtered view exports as it stands. The set is capped (`MAX_EXPORT_CLIPS`) and the response reports
 `X-Clip-Count` and `X-Export-Truncated` rather than silently trimming.
 
+Enrichment is enqueued through the same `POST /api/v1/jobs` as a download, with
+`{"kind": "enrich", "clip_id": …, "target": "transcript" | "comments"}`. It is idempotent per clip
+and target, and the runner drives `enrich_transcripts` / `enrich_comments` rather than
+reimplementing them, so a status means the same thing whether the CLI or the app produced it.
+Failures that a retry cannot fix — a missing extra, no signed-in session, a malformed payload — are
+terminal on the first attempt and carry a stable error code the UI turns into a recovery action.
+
 Collection mutations validate through the same schema and service used by CLI collection commands
 (`clipfetch/collections.py` — `save_collection`, `add_clips`/`remove_clips`, `resolve_collection`, and the
 `_FILTER_FIELDS`/`_validate_topics` guards). The API layer must not fork this validation.
