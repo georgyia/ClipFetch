@@ -145,11 +145,14 @@ export function useJobs() {
   });
 
   useEffect(() => {
-    if (!query.data) {
+    // Defensive: a body without a job array must not take the page down with it. Every surface
+    // that watches a job now mounts this hook, so a single odd response would blank the app.
+    const jobs = query.data?.jobs;
+    if (!Array.isArray(jobs)) {
       return;
     }
     let landed = false;
-    for (const job of query.data.jobs) {
+    for (const job of jobs) {
       if (job.state === "succeeded" && !settled.current.has(job.id)) {
         settled.current.add(job.id);
         // The first poll primes the set with already-finished jobs; only downloads that complete
