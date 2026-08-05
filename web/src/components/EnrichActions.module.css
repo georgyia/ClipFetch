@@ -1,0 +1,22 @@
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+  margin-top: var(--space-4);
+}
+
+.status,
+.error {
+  margin: 0;
+  font: var(--text-label);
+}
+
+.status {
+  color: var(--color-text-muted);
+}
+
+.error {
+  flex-basis: 100%;
+  color: var(--color-danger);
+}

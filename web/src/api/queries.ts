@@ -145,11 +145,14 @@ export function useJobs() {
   });
 
   useEffect(() => {
-    if (!query.data) {
+    // Defensive: a body without a job array must not take the page down with it. Every surface
+    // that watches a job now mounts this hook, so a single odd response would blank the app.
+    const jobs = query.data?.jobs;
+    if (!Array.isArray(jobs)) {
       return;
     }
     let landed = false;
-    for (const job of query.data.jobs) {
+    for (const job of jobs) {
       if (job.state === "succeeded" && !settled.current.has(job.id)) {
         settled.current.add(job.id);
         // The first poll primes the set with already-finished jobs; only downloads that complete
@@ -180,6 +183,29 @@ export function useEnqueueJob() {
         url: input.url ?? "",
         count: input.count ?? 1,
         quality: input.quality,
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["jobs"] });
+    },
+  });
+}
+
+/**
+ * Ask for one clip's enrichment — a transcript, or its comments — as a background job.
+ *
+ * Enqueuing is idempotent per clip and target, so a double click follows one job rather than
+ * queueing two. A prerequisite the machine does not have (the transcribe extra) is refused here
+ * with a 422 rather than queued, so the message arrives immediately instead of at the front of
+ * the queue.
+ */
+export function useEnrichClip() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: { clipId: string; target: "transcript" | "comments" }) =>
+      apiPost<Job>("/api/v1/jobs", {
+        kind: "enrich",
+        clip_id: input.clipId,
+        target: input.target,
       }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["jobs"] });

@@ -28,9 +28,27 @@ const RELATED = {
   items: [makeClip({ id: "IG_COOK2", caption: "Second" })],
 };
 
+/**
+ * Every mock in this file must answer /jobs: the page mounts EnrichActions, which watches the job
+ * list. A body without a `jobs` array used to blank the page.
+ */
+function jsonWithJobs(url: string, detail: unknown) {
+  if (url.includes("/related")) {
+    return RELATED;
+  }
+  if (url.includes("/jobs")) {
+    return { jobs: [] };
+  }
+  return detail;
+}
+
 function jsonFor(url: string) {
   if (url.includes("/related")) {
     return RELATED;
+  }
+  // The page now offers enrichment actions, which read the job list to follow what they start.
+  if (url.includes("/jobs")) {
+    return { jobs: [] };
   }
   return DETAIL;
 }
@@ -91,7 +109,7 @@ test("falls back to the recent queue when a clip has no topics", async () => {
     "fetch",
     vi.fn(
       async (input: RequestInfo | URL) =>
-        new Response(JSON.stringify(String(input).includes("/related") ? RELATED : untagged), {
+        new Response(JSON.stringify(jsonWithJobs(String(input), untagged)), {
           status: 200,
           headers: { "Content-Type": "application/json" },
         }),
@@ -108,7 +126,7 @@ test("collapses a long caption behind a Show more toggle", async () => {
     "fetch",
     vi.fn(
       async (input: RequestInfo | URL) =>
-        new Response(JSON.stringify(String(input).includes("/related") ? RELATED : long), {
+        new Response(JSON.stringify(jsonWithJobs(String(input), long)), {
           status: 200,
           headers: { "Content-Type": "application/json" },
         }),
@@ -138,7 +156,7 @@ test("disables watch when media is unavailable", async () => {
     "fetch",
     vi.fn(
       async (input: RequestInfo | URL) =>
-        new Response(JSON.stringify(String(input).includes("/related") ? RELATED : gone), {
+        new Response(JSON.stringify(jsonWithJobs(String(input), gone)), {
           status: 200,
           headers: { "Content-Type": "application/json" },
         }),

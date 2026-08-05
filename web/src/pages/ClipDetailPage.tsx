@@ -7,6 +7,7 @@ import { Button } from "../components/Button";
 import { Chip } from "../components/Chip";
 import { ClipRail } from "../components/ClipRail";
 import { CommentsPanel } from "../components/CommentsPanel";
+import { EnrichActions } from "../components/EnrichActions";
 import { ErrorState } from "../components/ErrorState";
 import { FavoriteButton } from "../components/FavoriteButton";
 import { Icon } from "../components/Icon";
@@ -267,7 +268,11 @@ export function ClipDetailPage() {
         </dl>
       </div>
 
-      {/* Both render nothing when the clip carries no enrichment, rather than an empty box. */}
+      {/*
+        Both panels render nothing when the clip carries no enrichment, rather than an empty box —
+        so the actions below are how you ask for it in the first place.
+      */}
+      <EnrichActions clip={clip} />
       <TranscriptPanel clip={clip} />
       <CommentsPanel clip={clip} />
 

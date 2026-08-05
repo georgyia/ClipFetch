@@ -60,7 +60,7 @@ def test_a_job_of_an_unrunnable_kind_never_becomes_a_download(tmp_path):
     """
     root = tmp_path / "lib"
     appstate = _appstate(tmp_path)
-    job = appstate.enqueue_job("lib", "enrich", json.dumps({"count": 2}), source_permalink=None)
+    job = appstate.enqueue_job("lib", "reindex", json.dumps({"count": 2}), source_permalink=None)
 
     finished = ingest_service.process_next_job(appstate, root, FakeSourceProvider())
     assert finished is not None and finished.id == job.id
