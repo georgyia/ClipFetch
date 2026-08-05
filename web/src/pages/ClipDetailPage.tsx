@@ -6,12 +6,14 @@ import { Badge } from "../components/Badge";
 import { Button } from "../components/Button";
 import { Chip } from "../components/Chip";
 import { ClipRail } from "../components/ClipRail";
+import { CommentsPanel } from "../components/CommentsPanel";
 import { ErrorState } from "../components/ErrorState";
 import { FavoriteButton } from "../components/FavoriteButton";
 import { Icon } from "../components/Icon";
 import { QualityBadge } from "../components/QualityBadge";
 import { SkeletonClipDetail } from "../components/Skeletons";
 import { TopicChip } from "../components/TopicChip";
+import { TranscriptPanel } from "../components/TranscriptPanel";
 import { Icons, type LucideIcon } from "../components/icons";
 import { compactCount, formatBytes, formatDate, formatDuration } from "../lib/format";
 import { watchLink } from "../lib/queueSource";
@@ -264,6 +266,10 @@ export function ClipDetailPage() {
           <dd>{clip.has_comments ? (clip.comment_status ?? "available") : "not available"}</dd>
         </dl>
       </div>
+
+      {/* Both render nothing when the clip carries no enrichment, rather than an empty box. */}
+      <TranscriptPanel clip={clip} />
+      <CommentsPanel clip={clip} />
 
       <RelatedRail clip={clip} />
     </article>

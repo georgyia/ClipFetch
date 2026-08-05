@@ -115,6 +115,77 @@ class ClipPage:
 
 
 @dataclass(frozen=True)
+class TranscriptView:
+    """One clip's stored speech transcript, with the provenance that makes it checkable.
+
+    ``status`` is the enricher's own category — ``complete``, ``silent`` (ran, no speech found),
+    ``unsupported``, ``failed`` — or ``None`` when transcription was never attempted. The stored
+    ``transcript_error`` is deliberately **not** carried here: it holds ``str(exception)`` from the
+    transcription backend, which can name local media paths. The status is the safe, stable signal.
+    """
+
+    clip_id: str
+    status: str | None
+    text: str | None
+    language: str | None
+    model_id: str | None
+    model_revision: str | None
+    updated_at: str | None
+    #: True when ``text`` was cut to the response cap; the full text stays in the catalog.
+    truncated: bool
+    character_count: int
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "clip_id": self.clip_id,
+            "status": self.status,
+            "text": self.text,
+            "language": self.language,
+            "model_id": self.model_id,
+            "model_revision": self.model_revision,
+            "updated_at": self.updated_at,
+            "truncated": self.truncated,
+            "character_count": self.character_count,
+        }
+
+
+@dataclass(frozen=True)
+class CommentView:
+    """One captured comment. Third-party text: render it as text, never as markup."""
+
+    id: str
+    text: str
+
+    def to_dict(self) -> dict[str, Any]:
+        return {"id": self.id, "text": self.text}
+
+
+@dataclass(frozen=True)
+class CommentPage:
+    """A bounded slice of a clip's captured comments.
+
+    Like :class:`TranscriptView`, this carries the enricher's ``status`` and not its stored error
+    string. ``retrieved_at`` is what makes the snapshot honest: these are the comments as they were
+    when captured, not as they are now.
+    """
+
+    items: tuple[CommentView, ...]
+    total: int
+    status: str | None
+    retrieved_at: str | None
+    next_offset: int | None
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "items": [item.to_dict() for item in self.items],
+            "total": self.total,
+            "status": self.status,
+            "retrieved_at": self.retrieved_at,
+            "next_offset": self.next_offset,
+        }
+
+
+@dataclass(frozen=True)
 class ApiError:
     """A safe, machine-readable error. ``message`` is user-facing; no internals leak."""
 

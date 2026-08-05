@@ -149,6 +149,22 @@ Collections are stored with the library (`.clipfetch/collections.json`), so they
 you copy the folder to another machine — and the CLI sees the same collections:
 `clipfetch library collection add reels keepers --clip ABC123`.
 
+### Reading a clip's transcript and comments
+
+If you enriched a clip with `clipfetch library enrich transcript` or `… enrich comments`, its detail
+page carries what that produced:
+
+- **Transcript** — the text, the language and the model that produced it (so you can tell *what*
+  transcribed it), a **Copy** action, and a find-within box that highlights every match and counts
+  them. Text search already looks inside transcripts, so this is where you see the words a result
+  actually matched on.
+- **Comments** — what was captured, with the time it was captured. These are a **local snapshot**,
+  not a live view: they are the comments as they were when fetched, and the panel says so.
+
+Neither panel appears for a clip that has no enrichment. If a run finished without producing
+anything, the panel explains why in plain terms — no speech found, comments turned off by the
+creator, the post was deleted, rate-limited, and so on.
+
 ### Choosing a theme
 
 Watch ships a refined dark theme and a light theme. **Settings → Appearance** offers *System*,

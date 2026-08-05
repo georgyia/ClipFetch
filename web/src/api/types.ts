@@ -79,6 +79,36 @@ export interface ClipPage {
   total_matched: number;
 }
 
+/**
+ * A clip's stored transcript. `status` is the enricher's own category — `complete`, `silent`
+ * (ran, found no speech), `unsupported`, `failed` — or null when it was never attempted.
+ */
+export interface Transcript {
+  clip_id: string;
+  status: string | null;
+  text: string | null;
+  language: string | null;
+  model_id: string | null;
+  model_revision: string | null;
+  updated_at: string | null;
+  truncated: boolean;
+  character_count: number;
+}
+
+export interface Comment {
+  id: string;
+  text: string;
+}
+
+/** Comments as captured at `retrieved_at` — a local snapshot, never live. */
+export interface CommentPage {
+  items: Comment[];
+  total: number;
+  status: string | null;
+  retrieved_at: string | null;
+  next_offset: number | null;
+}
+
 export interface Rail {
   id: string;
   title: string;

@@ -78,6 +78,38 @@ def get_clip(clip_id: str, root: ActiveLibraryRootDep) -> dict[str, Any]:
         ) from err
 
 
+@router.get("/{clip_id}/transcript")
+def get_transcript(clip_id: str, root: ActiveLibraryRootDep) -> dict[str, Any]:
+    """One clip's speech transcript.
+
+    A clip that was never transcribed answers 200 with a null status and no text — "no transcript"
+    is a state of a known clip, not a missing resource. Only an unknown clip is a 404.
+    """
+    from clipfetch.services import enrichment_service
+
+    try:
+        return enrichment_service.get_transcript(root, clip_id).to_dict()
+    except CatalogError as err:
+        raise ApiException(404, "clip_not_found", str(err)) from err
+
+
+@router.get("/{clip_id}/comments")
+def get_comments(
+    clip_id: str,
+    root: ActiveLibraryRootDep,
+    limit: Annotated[int, Query(ge=1, le=100)] = 50,
+    offset: Annotated[int, Query(ge=0)] = 0,
+) -> dict[str, Any]:
+    """One clip's captured comments — a local snapshot from when they were fetched, not live."""
+    from clipfetch.services import enrichment_service
+
+    try:
+        page = enrichment_service.list_comments(root, clip_id, limit=limit, offset=offset)
+    except CatalogError as err:
+        raise ApiException(404, "clip_not_found", str(err)) from err
+    return page.to_dict()
+
+
 @router.get("/{clip_id}/related")
 def get_related(
     clip_id: str,
