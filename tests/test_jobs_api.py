@@ -73,6 +73,18 @@ def test_unknown_kind_is_rejected(tmp_path):
     assert resp.status_code == 422
 
 
+def test_a_kind_the_worker_cannot_run_is_refused_at_enqueue(tmp_path):
+    """Enrichment is planned (#180) but unimplemented, so the API must not take the request.
+
+    Accepting it would queue work nothing can perform — and the worker claims by age, not by kind.
+    """
+    client, _ = _client(tmp_path)
+    resp = client.post("/api/v1/jobs", json={"kind": "enrich", "url": "https://x/p/1"})
+    assert resp.status_code == 422
+    assert resp.json()["error"]["code"] == "invalid_job"
+    assert client.get("/api/v1/jobs").json()["jobs"] == []
+
+
 def test_cancel_queued_job(tmp_path):
     client, _ = _client(tmp_path)
     job = client.post("/api/v1/jobs", json={"kind": "download", "url": "https://x/p/1"}).json()

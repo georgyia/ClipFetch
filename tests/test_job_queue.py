@@ -79,6 +79,19 @@ def test_failure_retries_with_backoff_then_gives_up(appstate):
     assert final.finished_at is not None
 
 
+def test_failure_that_cannot_succeed_on_retry_is_terminal_immediately(appstate):
+    job = appstate.enqueue_job("lib", "download", "{}", max_attempts=3)
+    appstate.claim_job("w", lease_seconds=30)
+
+    final = appstate.fail_job(
+        job.id, "w", error_code="unsupported_job_kind", error_message="nope", retry=False
+    )
+    # Attempts remain, but backing off twice to fail identically only delays the answer.
+    assert final.state == JOB_FAILED
+    assert final.finished_at is not None
+    assert appstate.claim_job("w", lease_seconds=30) is None
+
+
 def test_heartbeat_updates_progress_and_extends_lease(appstate):
     job = appstate.enqueue_job("lib", "download", "{}")
     appstate.claim_job("w", lease_seconds=30)
