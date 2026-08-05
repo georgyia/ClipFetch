@@ -1322,6 +1322,22 @@ DELETE /api/v1/search/recent
 
 Use POST for semantic requests if the body contains longer text or tuning inputs. Cache model and index readiness across requests where the semantic implementation safely allows it.
 
+### 10.7b Library maintenance
+
+```text
+GET  /api/v1/maintenance/missing
+POST /api/v1/maintenance/missing/forget
+```
+
+Indexing reconciles *presence* — a vanished file is marked unavailable, never dropped — so dead
+records accumulate where no browse view can show them (filtering always excludes unavailable
+clips). These two endpoints are the counterweight: list them, and forget the ones that are gone
+for good. Forgetting removes the catalog row and its derived data (embeddings, topic assignments,
+comments, signatures, probe details) and **never touches media**; the service re-checks presence
+first and reports anything it *kept* rather than removing a clip whose file came back. The listing
+carries `relative_path` — library-relative, as in the exports — because it is what makes a row
+actionable.
+
 ### 10.8 Topics and collections
 
 ```text

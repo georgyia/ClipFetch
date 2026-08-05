@@ -11,6 +11,7 @@ import { ExplorePage } from "../pages/ExplorePage";
 import { FavoritesPage } from "../pages/FavoritesPage";
 import { HomePage } from "../pages/HomePage";
 import { LibraryPage } from "../pages/LibraryPage";
+import { MissingMediaPage } from "../pages/MissingMediaPage";
 import { PlayerPage } from "../pages/PlayerPage";
 import { RecentPage } from "../pages/RecentPage";
 import { SearchPage } from "../pages/SearchPage";
@@ -34,6 +35,7 @@ export function App() {
             <Route path="/search" element={<SearchPage />} />
             <Route path="/library" element={<LibraryPage />} />
             <Route path="/library/recent" element={<RecentPage />} />
+            <Route path="/library/missing" element={<MissingMediaPage />} />
             <Route path="/library/favorites" element={<FavoritesPage />} />
             <Route path="/topics/:slug" element={<TopicPage />} />
             <Route path="/collections" element={<CollectionsPage />} />

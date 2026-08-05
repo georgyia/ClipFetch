@@ -17,9 +17,11 @@ import type {
   CommentPage,
   Diagnostics,
   DirListing,
+  ForgetReport,
   HomeResponse,
   Job,
   LibrarySummary,
+  MissingPage,
   PlaybackView,
   RescanReport,
   SearchResponse,
@@ -357,6 +359,30 @@ export function useComments(clipId: string | undefined, enabled = true, limit = 
         `/api/v1/clips/${encodeURIComponent(clipId ?? "")}/comments?limit=${limit}`,
       ),
     enabled: Boolean(clipId) && enabled,
+  });
+}
+
+/** Clips whose media file has gone missing — the only view that shows unavailable clips. */
+export function useMissingClips(limit = 200) {
+  return useQuery({
+    queryKey: ["missing-media", limit],
+    queryFn: () => apiGet<MissingPage>(`/api/v1/maintenance/missing?limit=${limit}`),
+  });
+}
+
+/**
+ * Drop catalog records for clips whose media is gone. Never deletes a file — the server re-checks
+ * presence and reports anything it kept, so a stale list cannot remove a clip that came back.
+ */
+export function useForgetMissing() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (clipIds: string[]) =>
+      apiPost<ForgetReport>("/api/v1/maintenance/missing/forget", { clip_ids: clipIds }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["missing-media"] });
+      queryClient.invalidateQueries({ queryKey: ["diagnostics"] });
+    },
   });
 }
 

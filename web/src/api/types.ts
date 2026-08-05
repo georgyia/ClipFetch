@@ -100,6 +100,28 @@ export interface Comment {
   text: string;
 }
 
+/**
+ * A clip whose media file is gone. Carries `relative_path` — library-relative, never absolute —
+ * because it is the one thing that makes the row actionable: which file to go looking for.
+ */
+export interface MissingClip extends ClipSummary {
+  relative_path: string;
+  file_size_bytes: number;
+}
+
+export interface MissingPage {
+  items: MissingClip[];
+  total: number;
+  next_offset: number | null;
+}
+
+/** What a forget request did. `kept` names clips whose file turned out to be present after all. */
+export interface ForgetReport {
+  forgotten: string[];
+  kept: string[];
+  unknown: string[];
+}
+
 /** Comments as captured at `retrieved_at` — a local snapshot, never live. */
 export interface CommentPage {
   items: Comment[];

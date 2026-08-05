@@ -130,6 +130,14 @@ export function LibraryPage() {
           <p>
             <Link to="/collections">Manage collections →</Link>
           </p>
+          {/*
+            Missing media is library health, so it belongs here rather than in a browse view —
+            which is also the only place it *could* live, since every browse view filters
+            unavailable clips out.
+          */}
+          <p>
+            <Link to="/library/missing">Check for missing media →</Link>
+          </p>
           {rescanStatus ? (
             <p className={styles.status} role="status">
               {rescanStatus}

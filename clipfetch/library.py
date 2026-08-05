@@ -142,6 +142,30 @@ def query_selection(
     )
 
 
+def query_missing(root: Path, *, limit: int | None = None, offset: int = 0) -> QueryResult:
+    """Return the catalogued clips whose media file is gone, newest first.
+
+    The complement of every other query here: filtering always drops unavailable clips (see
+    :func:`evaluate_filter`), so without this there is no way to look at them. Presence is checked
+    against the filesystem on each call rather than trusted from the stored flag, so a file that
+    came back is not reported as missing.
+    """
+    if not root.is_dir():
+        raise CatalogError(f"library directory does not exist: {root.resolve()}")
+    with Catalog.open(root) as catalog:
+        records = [_refresh_presence(root, record) for record in catalog.all()]
+    missing = [record for record in records if not record.available]
+    ordered = _sort_records(missing, "date")
+    start = min(offset, len(ordered))
+    selected = ordered[start:] if limit is None else ordered[start : start + limit]
+    return QueryResult(
+        clips=tuple(selected),
+        matched=len(missing),
+        excluded=len(records) - len(missing),
+        unknown_required_metadata=0,
+    )
+
+
 def matches_filter(
     record: CatalogRecord,
     filters: ClipFilter,
