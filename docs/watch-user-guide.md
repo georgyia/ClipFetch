@@ -194,6 +194,23 @@ you can go looking for it. Two ways out:
   anything, so a row that came back while you were reading is kept rather than dropped. If a
   forgotten file ever returns, `clipfetch library index` re-creates the clip from it.
 
+### Insights: what you actually watch
+
+**Library → See what you actually watch** summarizes the library and your viewing: how many clips
+you hold, how much of it you have opened, the creators and topics you return to, and the last 30
+days of activity. Every figure links to the clips behind it.
+
+Two things it deliberately is not. It is not tracking: everything is counted on demand from the
+playback positions the player already saves on this device, opening the page records nothing, and
+no number leaves your machine. And it is not a scoreboard — there are no streaks or goals. The one
+nudge is towards the clips you collected and never opened, because that is the only figure with an
+obvious next step.
+
+**Watch time** is the furthest point you reached in each clip, added up: a clip you finished counts
+its full length once, one you abandoned counts where you stopped. Rewatching does not multiply it,
+because nothing records whether a second play ran to the end — that number would be invented rather
+than measured. Rewatches do show up in the play counts.
+
 ### Choosing a theme
 
 Watch ships a refined dark theme and a light theme. **Settings → Appearance** offers *System*,

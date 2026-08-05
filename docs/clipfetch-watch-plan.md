@@ -1338,6 +1338,23 @@ first and reports anything it *kept* rather than removing a clip whose file came
 carries `relative_path` — library-relative, as in the exports — because it is what makes a row
 actionable.
 
+### 10.7c Insights
+
+```text
+GET /api/v1/insights
+```
+
+Aggregates for one library, computed on demand from the catalog and this device's playback rows —
+no new tables, no tracking, and nothing written when the view is read. Playback is aggregated in
+SQL (`AppState.playback_totals`, `plays_by_day`); the catalog contributes one pass shared by every
+metric rather than a query per figure.
+
+Two definitions the UI must carry with the numbers, since a statistic nobody can interpret is
+decoration: **watch time** is the furthest point reached in each clip, summed (a rewatch is *not*
+multiplied in — nothing records whether a second play finished), and **plays** is the running total
+of starts, which is why it can exceed the count of clips watched. Playback rows can outlive their
+clips, so `watched_clips` is the intersection with what the catalog still holds.
+
 ### 10.8 Topics and collections
 
 ```text

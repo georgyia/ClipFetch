@@ -131,6 +131,22 @@ export interface CommentPage {
   next_offset: number | null;
 }
 
+/** Aggregates computed on demand from the catalog and this device's playback rows. */
+export interface Insights {
+  totals: {
+    clips: number;
+    watched_clips: number;
+    unwatched_clips: number;
+    completed_clips: number;
+    plays: number;
+    /** Furthest point reached in each clip, summed — rewatches are not multiplied in. */
+    watch_time_seconds: number;
+  };
+  top_creators: Array<{ creator: string; plays: number; clips: number }>;
+  top_topics: Array<{ topic: string; plays: number; clips: number }>;
+  activity: Array<{ day: string; clips: number }>;
+}
+
 export interface Rail {
   id: string;
   title: string;
