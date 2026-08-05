@@ -523,6 +523,36 @@ class Catalog:
             )
         return "updated" if existing else "inserted"
 
+    def forget(self, platform: str, clip_id: str) -> bool:
+        """Delete one clip's catalog row and everything derived from it. Never touches media.
+
+        Returns ``False`` when there was no such row, so a repeated call is not an error. This is
+        the only removal the catalog offers: indexing reconciles *presence*, marking a vanished
+        file unavailable rather than dropping what is known about it, which is the right default —
+        a moved folder must not cost you your metadata. Forgetting is the explicit opposite, for a
+        record whose file is gone for good. Re-indexing a restored file simply re-creates the clip.
+        """
+        with self._lock, self._connection:
+            row = self._connection.execute(
+                "SELECT 1 FROM clips WHERE platform = ? AND clip_id = ?", (platform, clip_id)
+            ).fetchone()
+            if row is None:
+                return False
+            for table in (
+                "semantic_embeddings",
+                "topic_assignments",
+                "clip_comments",
+                "media_signatures",
+                "media_details",
+            ):
+                self._connection.execute(
+                    f"DELETE FROM {table} WHERE platform = ? AND clip_id = ?", (platform, clip_id)
+                )
+            self._connection.execute(
+                "DELETE FROM clips WHERE platform = ? AND clip_id = ?", (platform, clip_id)
+            )
+        return True
+
     def mark_missing_except(self, seen: set[tuple[str, str]]) -> int:
         missing = 0
         with self._lock, self._connection:

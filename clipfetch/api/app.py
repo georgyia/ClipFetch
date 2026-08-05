@@ -31,6 +31,7 @@ from clipfetch.api.routes import (
     home,
     jobs,
     libraries,
+    maintenance,
     media,
     playback,
     search,
@@ -122,6 +123,7 @@ def create_app(
     app.include_router(fs.router)
     app.include_router(home.router)
     app.include_router(jobs.router)
+    app.include_router(maintenance.router)
     app.include_router(media.router)
     app.include_router(playback.router)
     app.include_router(search.router)

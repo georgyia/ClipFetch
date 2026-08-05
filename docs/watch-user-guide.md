@@ -178,6 +178,22 @@ library-relative paths — so a playlist keeps working after you move the librar
 in the file names your machine. This is the same output as
 `clipfetch library export reels --collection NAME --format m3u`.
 
+### When a clip's file goes missing
+
+ClipFetch never drops what it knows about a clip just because the file disappeared — if you move a
+folder, your captions, topics, and transcripts should survive the move. The clip is marked
+**unavailable** instead, and it stops appearing in browse views and playback.
+
+**Library → Check for missing media** lists those clips, with the path each one used to live at so
+you can go looking for it. Two ways out:
+
+- **Rescan library** — the usual fix. A folder you moved back, or files added out of band, are
+  found again and the rows disappear.
+- **Forget** — for records whose file is gone for good. This removes what the catalog knows about
+  the clip. It **never deletes a file**, and the server re-checks the disk before removing
+  anything, so a row that came back while you were reading is kept rather than dropped. If a
+  forgotten file ever returns, `clipfetch library index` re-creates the clip from it.
+
 ### Choosing a theme
 
 Watch ships a refined dark theme and a light theme. **Settings → Appearance** offers *System*,
