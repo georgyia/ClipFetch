@@ -19,6 +19,7 @@ import type {
   DirListing,
   ForgetReport,
   HomeResponse,
+  Insights,
   Job,
   LibrarySummary,
   MissingPage,
@@ -236,6 +237,14 @@ export function useHome() {
  * Every saved collection. `enabled` lets a surface that only needs them on demand — the
  * add-to-collection dialog, opened from a card — avoid fetching until it opens.
  */
+/** Library and viewing aggregates. Read-only: opening this records nothing. */
+export function useInsights() {
+  return useQuery({
+    queryKey: ["insights"],
+    queryFn: () => apiGet<Insights>("/api/v1/insights"),
+  });
+}
+
 export function useCollections(enabled = true) {
   return useQuery({
     queryKey: ["collections"],

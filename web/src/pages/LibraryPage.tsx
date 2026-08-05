@@ -130,6 +130,9 @@ export function LibraryPage() {
           <p>
             <Link to="/collections">Manage collections →</Link>
           </p>
+          <p>
+            <Link to="/library/insights">See what you actually watch →</Link>
+          </p>
           {/*
             Missing media is library health, so it belongs here rather than in a browse view —
             which is also the only place it *could* live, since every browse view filters

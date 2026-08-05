@@ -1,0 +1,137 @@
+.lead {
+  max-width: 70ch;
+  margin: 0 0 var(--space-6);
+  color: var(--color-text-secondary);
+}
+
+.stats {
+  list-style: none;
+  margin: 0 0 var(--space-8);
+  padding: 0;
+  display: grid;
+  gap: var(--space-4);
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+}
+
+.stat {
+  display: grid;
+  gap: var(--space-1);
+  align-content: start;
+  padding: var(--space-5);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-card);
+}
+
+.value {
+  font: 700 30px / 34px var(--font-sans);
+  letter-spacing: var(--tracking-heading);
+  font-variant-numeric: tabular-nums;
+  color: var(--color-text);
+}
+
+.label {
+  color: var(--color-text-secondary);
+  font: var(--text-label);
+}
+
+a.label:hover {
+  color: var(--color-accent);
+}
+
+.note {
+  margin: 0;
+  color: var(--color-text-muted);
+  font: var(--text-label);
+}
+
+.cta {
+  margin-top: var(--space-1);
+  color: var(--color-accent);
+  font: var(--text-label);
+  text-decoration: none;
+}
+
+.columns {
+  display: grid;
+  gap: var(--space-4);
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  margin-bottom: var(--space-4);
+}
+
+.panel {
+  padding: var(--space-5);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-panel);
+  margin-bottom: var(--space-4);
+}
+
+.panelTitle {
+  margin: 0 0 var(--space-4);
+  font: var(--text-heading);
+  letter-spacing: var(--tracking-heading);
+}
+
+.rank {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: var(--space-3);
+}
+
+.row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-4);
+}
+
+.rowName {
+  color: var(--color-text);
+  font: 600 15px / 20px var(--font-sans);
+  text-decoration: none;
+  overflow-wrap: anywhere;
+}
+
+.rowName:hover {
+  color: var(--color-accent);
+}
+
+.rowMeta {
+  color: var(--color-text-muted);
+  font: var(--text-label);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.activity {
+  list-style: none;
+  margin: 0 0 var(--space-4);
+  padding: 0;
+  display: flex;
+  align-items: flex-end;
+  gap: 4px;
+  height: 120px;
+}
+
+.day {
+  flex: 1;
+  min-width: 4px;
+  height: 100%;
+  display: flex;
+  align-items: flex-end;
+}
+
+.bar {
+  width: 100%;
+  border-radius: var(--radius-control) var(--radius-control) 2px 2px;
+  background: var(--color-accent);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .bar {
+    transition: height var(--duration-slow, 300ms) var(--ease-standard, ease);
+  }
+}

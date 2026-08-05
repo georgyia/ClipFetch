@@ -436,6 +436,60 @@ class AppState:
         ).fetchall()
         return tuple(_playback(row) for row in rows)
 
+    def playback_totals(self, library_id: str) -> dict[str, int]:
+        """Aggregate one library's playback in SQL rather than by walking rows in Python.
+
+        ``watched_ms`` is the *furthest point reached* per clip, summed: a completed clip counts
+        its full duration once, an abandoned one counts where it stopped. Deliberately not
+        ``duration × play_count`` — nothing records whether a rewatch ran to the end, so that
+        number would be an invention rather than a measurement.
+        """
+        row = self._connection.execute(
+            """
+            SELECT
+                COUNT(*) AS clips,
+                COALESCE(SUM(play_count), 0) AS plays,
+                COALESCE(SUM(completed), 0) AS completed,
+                COALESCE(SUM(
+                    CASE WHEN completed = 1 AND duration_ms IS NOT NULL
+                         THEN duration_ms ELSE position_ms END
+                ), 0) AS watched_ms
+            FROM playback_state WHERE library_id = ?
+            """,
+            (library_id,),
+        ).fetchone()
+        return {
+            "clips": int(row["clips"]),
+            "plays": int(row["plays"]),
+            "completed": int(row["completed"]),
+            "watched_ms": int(row["watched_ms"]),
+        }
+
+    def plays_by_day(self, library_id: str, *, days: int = 30) -> tuple[tuple[str, int], ...]:
+        """Return ``(YYYY-MM-DD, clips played)`` for the most recent days, oldest first.
+
+        Counts *clips touched* on a day, not plays: ``play_count`` is a running total with no
+        per-day history, so attributing all of it to the last-played date would be wrong.
+        """
+        since = (datetime.now(timezone.utc) - timedelta(days=max(1, days))).isoformat()
+        rows = self._connection.execute(
+            """
+            SELECT substr(last_played_at, 1, 10) AS day, COUNT(*) AS clips
+            FROM playback_state
+            WHERE library_id = ? AND last_played_at >= ?
+            GROUP BY day ORDER BY day
+            """,
+            (library_id, since),
+        ).fetchall()
+        return tuple((str(row["day"]), int(row["clips"])) for row in rows)
+
+    def all_playback(self, library_id: str) -> tuple[PlaybackEntry, ...]:
+        """Every playback row for a library — bounded by clips *watched*, not by library size."""
+        rows = self._connection.execute(
+            "SELECT * FROM playback_state WHERE library_id = ? ORDER BY clip_id", (library_id,)
+        ).fetchall()
+        return tuple(_playback(row) for row in rows)
+
     # -- favorites -------------------------------------------------------------
 
     def add_favorite(self, library_id: str, clip_id: str) -> None:

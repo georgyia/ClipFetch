@@ -10,6 +10,7 @@ import { DownloadsPage } from "../pages/DownloadsPage";
 import { ExplorePage } from "../pages/ExplorePage";
 import { FavoritesPage } from "../pages/FavoritesPage";
 import { HomePage } from "../pages/HomePage";
+import { InsightsPage } from "../pages/InsightsPage";
 import { LibraryPage } from "../pages/LibraryPage";
 import { MissingMediaPage } from "../pages/MissingMediaPage";
 import { PlayerPage } from "../pages/PlayerPage";
@@ -36,6 +37,7 @@ export function App() {
             <Route path="/library" element={<LibraryPage />} />
             <Route path="/library/recent" element={<RecentPage />} />
             <Route path="/library/missing" element={<MissingMediaPage />} />
+            <Route path="/library/insights" element={<InsightsPage />} />
             <Route path="/library/favorites" element={<FavoritesPage />} />
             <Route path="/topics/:slug" element={<TopicPage />} />
             <Route path="/collections" element={<CollectionsPage />} />
