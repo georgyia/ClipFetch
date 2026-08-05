@@ -165,6 +165,19 @@ Neither panel appears for a clip that has no enrichment. If a run finished witho
 anything, the panel explains why in plain terms — no speech found, comments turned off by the
 creator, the post was deleted, rate-limited, and so on.
 
+### Exporting a view
+
+Any collection, and any filtered Explore view, has an **Export** control next to *Play all*. It
+offers two formats and tells you how many clips it covers first:
+
+- **Playlist (`.m3u`)** — opens in VLC, mpv, or anything else that reads a playlist.
+- **Manifest (`.json`)** — the metadata for every clip, stable enough to keep or diff.
+
+Exports cover the **whole** match set, not just the pages you have scrolled through, and both use
+library-relative paths — so a playlist keeps working after you move the library folder, and nothing
+in the file names your machine. This is the same output as
+`clipfetch library export reels --collection NAME --format m3u`.
+
 ### Choosing a theme
 
 Watch ships a refined dark theme and a light theme. **Settings → Appearance** offers *System*,

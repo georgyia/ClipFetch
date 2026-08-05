@@ -31,8 +31,9 @@ const MIN_LIKES = [
 /** Topics shown as chips before the rest fold into a select. */
 const TOPIC_CHIP_LIMIT = 10;
 
-function buildPath(params: URLSearchParams, cursor: string | null): string {
-  const query = new URLSearchParams({ limit: "24", sort: params.get("sort") || "date" });
+/** The active filters as API query parameters — shared by the listing and the export. */
+function filterQuery(params: URLSearchParams): URLSearchParams {
+  const query = new URLSearchParams({ sort: params.get("sort") || "date" });
   for (const field of ["topic", "platform", "creator"] as const) {
     const value = params.get(field);
     if (value) {
@@ -43,10 +44,26 @@ function buildPath(params: URLSearchParams, cursor: string | null): string {
   if (minLikes) {
     query.set("min_likes", minLikes);
   }
+  return query;
+}
+
+function buildPath(params: URLSearchParams, cursor: string | null): string {
+  const query = filterQuery(params);
+  query.set("limit", "24");
   if (cursor) {
     query.set("cursor", cursor);
   }
   return `/api/v1/clips?${query.toString()}`;
+}
+
+/**
+ * The same filters pointed at the export endpoint, so what downloads is what the page shows —
+ * the whole match set, not only the pages scrolled into view.
+ */
+function exportPath(params: URLSearchParams): string {
+  const query = filterQuery(params);
+  query.set("name", params.get("topic") || params.get("creator") || "explore");
+  return `/api/v1/clips/export?${query.toString()}`;
 }
 
 interface ActiveFilter {
@@ -275,6 +292,7 @@ export function ExplorePage() {
           ) : undefined
         }
         queueContext={{ from: "explore", params }}
+        exportPath={exportPath(params)}
       />
     </section>
   );

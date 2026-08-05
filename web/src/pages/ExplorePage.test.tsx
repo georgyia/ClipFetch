@@ -126,6 +126,18 @@ test("Clear all drops every filter but keeps the sort preference", async () => {
   expect(lastClipsUrl).toContain("sort=likes");
 });
 
+test("exports exactly the filters the view is showing", async () => {
+  renderExplore("/explore?platform=tiktok&sort=likes");
+  await screen.findByRole("link", { name: "Alpha" });
+
+  const playlist = screen.getByRole("link", { name: /Playlist/ });
+  const href = playlist.getAttribute("href") ?? "";
+  expect(href).toContain("/api/v1/clips/export?");
+  expect(href).toContain("platform=tiktok");
+  expect(href).toContain("sort=likes");
+  expect(href).toContain("format=m3u");
+});
+
 test("offers Play all and Shuffle so a filtered set becomes a queue", async () => {
   renderExplore();
   expect(

@@ -7,14 +7,15 @@ FastAPI evaluates these route signatures at runtime, so this module intentionall
 from datetime import date
 from typing import Annotated, Any, Optional
 
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, Query, Response
 
 from clipfetch.api.dependencies import ActiveLibraryRootDep
 from clipfetch.api.errors import ApiException
 from clipfetch.catalog import CatalogError
 from clipfetch.library import ClipFilter
-from clipfetch.services import catalog_service
+from clipfetch.services import catalog_service, export_service
 from clipfetch.services.catalog_service import InvalidCursorError
+from clipfetch.services.export_service import ExportError
 
 router = APIRouter(prefix="/api/v1/clips", tags=["clips"])
 
@@ -66,6 +67,60 @@ def list_clips(
     except CatalogError as err:
         raise ApiException(404, "library_unavailable", str(err)) from err
     return page.to_dict()
+
+
+# Registered before "/{clip_id}": FastAPI matches in declaration order, so a literal segment that
+# comes after a path parameter would be swallowed as a clip id. A test pins this ordering.
+@router.get("/export")
+def export_clips(
+    root: ActiveLibraryRootDep,
+    format: Annotated[str, Query()] = "m3u",
+    sort: Annotated[str, Query()] = "date",
+    name: Annotated[str, Query(max_length=60)] = "clips",
+    topic: Annotated[Optional[list[str]], Query()] = None,
+    creator: Annotated[Optional[list[str]], Query()] = None,
+    hashtag: Annotated[Optional[list[str]], Query()] = None,
+    platform: Annotated[Optional[list[str]], Query()] = None,
+    min_likes: Annotated[Optional[int], Query(ge=0)] = None,
+    max_likes: Annotated[Optional[int], Query(ge=0)] = None,
+    min_views: Annotated[Optional[int], Query(ge=0)] = None,
+    max_views: Annotated[Optional[int], Query(ge=0)] = None,
+    downloaded_after: Annotated[Optional[date], Query()] = None,
+    downloaded_before: Annotated[Optional[date], Query()] = None,
+) -> Response:
+    """Download the clips a filter currently matches, as an M3U playlist or a JSON manifest.
+
+    Takes the same filter allowlist as the listing endpoint, so whatever Explore is showing can be
+    exported exactly as it stands.
+    """
+    _require_sort(sort)
+    filters = ClipFilter(
+        min_likes=min_likes,
+        max_likes=max_likes,
+        min_views=min_views,
+        max_views=max_views,
+        authors=tuple(creator or ()),
+        hashtags=tuple(hashtag or ()),
+        platforms=tuple(platform or ()),
+        topics=tuple(topic or ()),
+        downloaded_after=downloaded_after,
+        downloaded_before=downloaded_before,
+    )
+    try:
+        export = export_service.export_view(root, filters, fmt=format, sort=sort, name=name)
+    except ExportError as err:
+        raise ApiException(422, "invalid_format", str(err)) from err
+    except CatalogError as err:
+        raise ApiException(404, "library_unavailable", str(err)) from err
+    return Response(
+        content=export.body,
+        media_type=export.media_type,
+        headers={
+            "Content-Disposition": f'attachment; filename="{export.filename}"',
+            "X-Clip-Count": str(export.clip_count),
+            "X-Export-Truncated": "true" if export.truncated else "false",
+        },
+    )
 
 
 @router.get("/{clip_id}")
