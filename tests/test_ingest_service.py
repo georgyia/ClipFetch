@@ -52,6 +52,32 @@ def test_process_next_job_returns_none_when_empty(tmp_path):
     assert ingest_service.process_next_job(appstate, tmp_path / "lib", FakeSourceProvider()) is None
 
 
+def test_a_job_of_an_unrunnable_kind_never_becomes_a_download(tmp_path):
+    """The queue is claimed by age, not by kind, so an unknown kind reaches the runner.
+
+    Before this guard it fell through to the download path with an empty permalink — the "your
+    feed" sentinel — so asking for something else harvested the feed instead.
+    """
+    root = tmp_path / "lib"
+    appstate = _appstate(tmp_path)
+    job = appstate.enqueue_job("lib", "enrich", json.dumps({"count": 2}), source_permalink=None)
+
+    finished = ingest_service.process_next_job(appstate, root, FakeSourceProvider())
+    assert finished is not None and finished.id == job.id
+    assert finished.state == JOB_FAILED
+    assert finished.public_error_code == "unsupported_job_kind"
+    assert not list(root.rglob("*.mp4"))
+
+    # Terminal on the first attempt: a kind this version cannot run will not become runnable.
+    assert ingest_service.process_next_job(appstate, root, FakeSourceProvider()) is None
+
+
+def test_the_api_accepts_exactly_the_kinds_the_worker_runs(tmp_path):
+    from clipfetch.services import jobs_service
+
+    assert jobs_service.JOB_KINDS == ingest_service.RUNNABLE_JOB_KINDS
+
+
 def test_source_failure_is_recorded_safely(tmp_path):
     root = tmp_path / "lib"
     appstate = _appstate(tmp_path)

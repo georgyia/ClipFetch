@@ -591,13 +591,18 @@ class AppState:
         return self.get_job(job_id)
 
     def fail_job(
-        self, job_id: str, owner: str, *, error_code: str, error_message: str
+        self, job_id: str, owner: str, *, error_code: str, error_message: str, retry: bool = True
     ) -> Job:
-        """Record a failure. Retries with backoff if attempts remain and no cancel was requested."""
+        """Record a failure. Retries with backoff if attempts remain and no cancel was requested.
+
+        Pass ``retry=False`` for a failure that cannot succeed on a second attempt — a job whose
+        kind this version cannot run, say. Backing off three times to fail identically only delays
+        the answer the user is waiting for.
+        """
         now = _now()
         with self._lock:
             job = self._require_lease(job_id, owner)
-            if not job.cancel_requested and job.attempt < job.max_attempts:
+            if retry and not job.cancel_requested and job.attempt < job.max_attempts:
                 self._connection.execute(
                     """
                     UPDATE jobs SET

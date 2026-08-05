@@ -27,6 +27,14 @@ from clipfetch.catalog import Catalog, CatalogRecord
 DEFAULT_OWNER = "clipfetch-worker"
 DEFAULT_LEASE_SECONDS = 60.0
 
+#: Job kinds this module knows how to run, and therefore the only kinds the API may accept.
+#:
+#: The runner owns this list rather than the API layer: a kind that can be enqueued but not run is
+#: a job that sits in the queue forever, or — worse, before this was enforced — one that fell
+#: through to the download path and harvested the feed instead. ``jobs_service`` re-exports this so
+#: both ends stay in step by construction.
+RUNNABLE_JOB_KINDS = ("download",)
+
 
 class IngestError(RuntimeError):
     """A source-level failure with a message safe to show the user.
@@ -189,6 +197,17 @@ def process_next_job(
     job = appstate.claim_job(owner, lease_seconds=lease_seconds)
     if job is None:
         return None
+    if job.kind not in RUNNABLE_JOB_KINDS:
+        # Never fall through to the download path: an unrunnable kind reaching this point means a
+        # queue written by another version (or by hand), and running it as a download would do
+        # something the user never asked for. It cannot succeed on a retry either, so it is final.
+        return appstate.fail_job(
+            job.id,
+            owner,
+            error_code="unsupported_job_kind",
+            error_message=f"This version cannot run {job.kind} jobs.",
+            retry=False,
+        )
     job_root = root_resolver(job) if root_resolver is not None else root
     if job_root is None:  # pragma: no cover - guarded by callers
         raise ValueError("process_next_job needs a root or a root_resolver")

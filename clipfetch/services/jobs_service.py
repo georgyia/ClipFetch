@@ -23,9 +23,13 @@ from clipfetch.appstate import (
     Job,
     JobEvent,
 )
+from clipfetch.services.ingest_service import RUNNABLE_JOB_KINDS
 
-#: Job kinds the API accepts.
-JOB_KINDS = ("download", "enrich")
+#: Job kinds the API accepts — exactly the kinds the worker can run, never a superset.
+#:
+#: Accepting a kind the runner does not implement is not a harmless placeholder: the worker claims
+#: by age, not by kind, so such a job either sits queued forever or gets run as something else.
+JOB_KINDS = RUNNABLE_JOB_KINDS
 
 _ACTIVE_STATES = frozenset({JOB_QUEUED, JOB_RUNNING})
 
