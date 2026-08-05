@@ -20,10 +20,10 @@ own streaming library.
 > **What ships today.** ClipFetch is a **command-line engine** for building and querying a personal short-video
 > library — downloading, catalog, search, topics, collections, and more. **ClipFetch Watch**, the local-first
 > *streaming interface* on top of that library, is now runnable as a **preview**: start it with `clipfetch web`
-> and browse, search, and watch your library in a calm, cinematic UI. The one part still to come is automated
-> downloading from *inside* Watch — for now you add clips with the CLI. See the
-> [user guide](docs/watch-user-guide.md), the [blueprint](docs/clipfetch-watch-plan.md), and the
-> [roadmap](docs/ROADMAP.md).
+> and browse, search, and watch your library in a calm, cinematic UI — and add to it, since downloads now run
+> from inside Watch through your signed-in browser profile (Instagram; TikTok and YouTube Shorts remain
+> [blocked](#platform-support)). See the [user guide](docs/watch-user-guide.md), the
+> [blueprint](docs/clipfetch-watch-plan.md), and the [roadmap](docs/ROADMAP.md).
 
 ---
 
@@ -338,18 +338,21 @@ npm --prefix web ci && npm --prefix web run build   # build the UI into the pack
 clipfetch web                  # serves http://127.0.0.1:8000 and opens your browser
 ```
 
-Point it at a library once via the built-in API docs (`/api/docs`), then browse. The one thing still to come is
-an **in-app download source**: the job queue and worker are real, but the live browser-driven downloader is not
-wired into Watch yet, so keep using the CLI to add clips. `clipfetch web --demo` runs the full job pipeline with
-an offline fake source. Full walkthrough: **[docs/watch-user-guide.md](docs/watch-user-guide.md)**.
+Point it at a library once via the built-in API docs (`/api/docs`), then browse. **Downloading works from inside
+Watch too:** connect Instagram once from Settings (it opens a browser window for the sign-in), then use *Add
+reels* on the Downloads page — the background worker drives the same browser stack the CLI uses, with live job
+progress, retries, and cancellation, and new clips appear without a manual re-index. It is Instagram-first, and
+UI-triggered sign-in needs a local display, so on a headless server sign in with the CLI first. `clipfetch web
+--demo` swaps the real source for an offline fake one, to try the queue and progress experience without a
+network or an account. Full walkthrough: **[docs/watch-user-guide.md](docs/watch-user-guide.md)**.
 
 📄 **Read the full blueprint:** [docs/clipfetch-watch-plan.md](docs/clipfetch-watch-plan.md) ·
 🗺️ **Short roadmap:** [docs/ROADMAP.md](docs/ROADMAP.md) ·
 📖 **User guide:** [docs/watch-user-guide.md](docs/watch-user-guide.md)
 
-*ClipFetch Watch is a working product name; it is runnable as a preview (streaming works; automated in-app
-downloading is still to come). "Netflix for Reels" describes the browsing quality we're aiming for, not a Netflix
-clone or any affiliation with Netflix.*
+*ClipFetch Watch is a working product name; it is runnable as a preview — streaming and Instagram downloading
+both work in-app. "Netflix for Reels" describes the browsing quality we're aiming for, not a Netflix clone or any
+affiliation with Netflix.*
 
 ---
 
